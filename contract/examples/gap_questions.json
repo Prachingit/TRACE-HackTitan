@@ -1,0 +1,26 @@
+[
+  {
+    "id": "gq-01",
+    "claim_id": "claim-d2",
+    "question": "What was the technical motivation and planned eviction/TTL policy for the in-memory cache added to the event lookup endpoint in commit c94a2b1?",
+    "answer": null,
+    "answered_by": null,
+    "answered_at": null
+  },
+  {
+    "id": "gq-02",
+    "claim_id": "claim-o1",
+    "question": "Did you receive confirmation from the SMS/WhatsApp vendor regarding the monthly quota allocation and burst rate limits for ticket notifications?",
+    "answer": null,
+    "answered_by": null,
+    "answered_at": null
+  },
+  {
+    "id": "gq-03",
+    "claim_id": "claim-g1",
+    "question": "What is the completion state of the 14 commits on branch 'aman/notif-wip', and what remaining integration steps are required to merge push notifications into main?",
+    "answer": null,
+    "answered_by": null,
+    "answered_at": null
+  }
+]

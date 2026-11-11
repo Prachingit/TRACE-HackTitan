@@ -1,0 +1,83 @@
+[
+  {
+    "number": 35,
+    "title": "feat: JWT authentication and token refresh workflow",
+    "author": "aman",
+    "state": "merged",
+    "created_at": "2026-10-10T12:00:00Z",
+    "comments": [
+      {
+        "author": "rohan",
+        "text": "Looks good. Expiration interval set to 24 hours is appropriate.",
+        "resolved": true
+      },
+      {
+        "author": "meera",
+        "text": "Tested login flow from mobile client. Headers match correctly.",
+        "resolved": true
+      }
+    ]
+  },
+  {
+    "number": 36,
+    "title": "feat: Events list pagination and category filters",
+    "author": "aman",
+    "state": "merged",
+    "created_at": "2026-10-16T11:00:00Z",
+    "comments": [
+      {
+        "author": "meera",
+        "text": "Can we default pageSize to 20 instead of 50 for mobile responsiveness?",
+        "resolved": true
+      },
+      {
+        "author": "aman",
+        "text": "Updated default page size to 20 in 8e3a2f.",
+        "resolved": true
+      }
+    ]
+  },
+  {
+    "number": 37,
+    "title": "ui: Student event registration and RSVP logic",
+    "author": "meera",
+    "state": "merged",
+    "created_at": "2026-10-22T09:30:00Z",
+    "comments": [
+      {
+        "author": "rohan",
+        "text": "Double check capacity constraints on popular events.",
+        "resolved": true
+      },
+      {
+        "author": "meera",
+        "text": "Added client-side disable button when event is sold out.",
+        "resolved": true
+      }
+    ]
+  },
+  {
+    "number": 38,
+    "title": "feat: Payment integration with payment gateway",
+    "author": "aman",
+    "state": "open",
+    "created_at": "2026-10-25T16:00:00Z",
+    "comments": [
+      {
+        "author": "rohan",
+        "text": "We need webhook signature validation before marking payment status as verified.",
+        "resolved": false
+      },
+      {
+        "author": "rohan",
+        "text": "What happens if the gateway fires the same callback twice? Idempotency check missing.",
+        "resolved": false
+      },
+      {
+        "author": "meera",
+        "text": "Frontend redirect callback URL isn't handling cancelled transactions properly.",
+        "resolved": false
+      }
+    ]
+  }
+]

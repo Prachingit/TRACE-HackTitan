@@ -1,0 +1,42 @@
+[
+  {
+    "id": "plan-step-1",
+    "handover_id": "ho-campusconnect-01",
+    "rank": 1,
+    "action": "Resolve PR #38 review comments regarding webhook signature validation and callback idempotency before updating T-12 to Done.",
+    "reason": "Payment integration is falsely marked Done on the task board while code review reveals critical security and double-crediting risks.",
+    "claim_ids": ["claim-c1"]
+  },
+  {
+    "id": "plan-step-2",
+    "handover_id": "ho-campusconnect-01",
+    "rank": 2,
+    "action": "Review and merge the 14 push notification commits on branch 'aman/notif-wip' and link them to T-11.",
+    "reason": "14 commits of work over 3 weeks currently exist unmerged and untracked, risking complete duplication of effort by incoming developer.",
+    "claim_ids": ["claim-g1"]
+  },
+  {
+    "id": "plan-step-3",
+    "handover_id": "ho-campusconnect-01",
+    "rank": 3,
+    "action": "Reassign task T-15 'Event reminders' and integrate Aman's scheduler commits on branch feature/reminders.",
+    "reason": "Tasks tracker lists Meera as assignee with status To Do, while Aman has already authored the background scheduler logic.",
+    "claim_ids": ["claim-c2"]
+  },
+  {
+    "id": "plan-step-4",
+    "handover_id": "ho-campusconnect-01",
+    "rank": 4,
+    "action": "Update project README and setup documentation to accurately state SQLite database usage and campus hosting constraints.",
+    "reason": "Outdated documentation references PostgreSQL, causing onboarding delays and confusion for incoming engineers.",
+    "claim_ids": ["claim-c3", "claim-d1"]
+  },
+  {
+    "id": "plan-step-5",
+    "handover_id": "ho-campusconnect-01",
+    "rank": 5,
+    "action": "Confirm SMS gateway quota limits with vendor and document caching TTL parameters for event lookups.",
+    "reason": "Resolves open loop on SMS billing quotas and establishes operational rationale for TTLCache behavior.",
+    "claim_ids": ["claim-o1", "claim-d2"]
+  }
+]

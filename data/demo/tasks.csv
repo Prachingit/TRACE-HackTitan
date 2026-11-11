@@ -1,0 +1,16 @@
+id,title,assignee,status,updated_at,linked_pr
+T-01,User login and JWT authentication,aman,Done,2026-10-10,#35
+T-02,Campus events list endpoint,aman,Done,2026-10-16,#36
+T-03,Student event registration card,meera,Done,2026-10-22,#37
+T-04,SQLite schema setup and migrations,aman,Done,2026-10-18,
+T-05,Student profile and settings page,meera,Done,2026-10-24,
+T-06,Event search by keywords,aman,Done,2026-10-26,
+T-07,Ticket QR code generation,aman,In Progress,2026-11-04,
+T-08,Organizer analytics dashboard,meera,In Progress,2026-11-05,
+T-09,Post-event feedback ratings,meera,To Do,2026-11-01,
+T-10,CSV export for attendee lists,aman,To Do,2026-11-02,
+T-11,Push notifications setup,neha,To Do,2026-11-05,
+T-12,Payment integration,aman,Done,2026-10-30,#38
+T-13,Campus venue interactive map,meera,To Do,2026-11-06,
+T-14,Password reset via email,neha,To Do,2026-11-07,
+T-15,Event reminders,meera,To Do,2026-10-28,

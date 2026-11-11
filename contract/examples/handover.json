@@ -1,0 +1,279 @@
+{
+  "id": "ho-campusconnect-01",
+  "project_id": "proj-campusconnect",
+  "version": 1,
+  "status": "draft",
+  "approved_by": null,
+  "approved_at": null,
+  "acknowledged_by": null,
+  "acknowledged_at": null,
+  "created_at": "2026-11-06T18:00:00Z",
+  "claims": [
+    {
+      "id": "claim-c1",
+      "project_id": "proj-campusconnect",
+      "type": "contradiction",
+      "statement": "Payment integration task T-12 is marked Done in tasks tracker, but PR #38 remains open with 3 unresolved review comments.",
+      "status": "conflicting",
+      "confidence_note": "Tracker board marked complete while code review shows critical open blockers.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-c1-1",
+          "claim_id": "claim-c1",
+          "activity_item_id": null,
+          "source_id": "src-tasks",
+          "source_title": "Project Tasks CSV",
+          "quote": "T-12,Payment integration,aman,Done,2026-10-30,#38",
+          "locator": "tasks.csv:T-12"
+        },
+        {
+          "id": "ev-c1-2",
+          "claim_id": "claim-c1",
+          "activity_item_id": null,
+          "source_id": "src-pull-requests",
+          "source_title": "GitHub Pull Requests",
+          "quote": "PR #38 state: open, 3 unresolved comments on webhook validation and idempotency",
+          "locator": "pull_requests.json:#38"
+        }
+      ]
+    },
+    {
+      "id": "claim-c2",
+      "project_id": "proj-campusconnect",
+      "type": "ownership",
+      "statement": "Task T-15 'Event reminders' is assigned to Meera with status To Do, but Aman authored all recent scheduler commits on feature/reminders.",
+      "status": "conflicting",
+      "confidence_note": "Ownership discrepancy between task assignee and git commits author.",
+      "owner": "meera",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-c2-1",
+          "claim_id": "claim-c2",
+          "activity_item_id": null,
+          "source_id": "src-tasks",
+          "source_title": "Project Tasks CSV",
+          "quote": "T-15,Event reminders,meera,To Do,2026-10-28,",
+          "locator": "tasks.csv:T-15"
+        },
+        {
+          "id": "ev-c2-2",
+          "claim_id": "claim-c2",
+          "activity_item_id": null,
+          "source_id": "src-git-log",
+          "source_title": "Git Commit Log",
+          "quote": "commit d1e2f3a by aman: feat(T-15): initial event reminder background task scheduler",
+          "locator": "git_log.json:d1e2f3a"
+        }
+      ]
+    },
+    {
+      "id": "claim-c3",
+      "project_id": "proj-campusconnect",
+      "type": "contradiction",
+      "statement": "Project README specifies PostgreSQL 15, but codebase configuration, commit logs, and chat establish SQLite is used.",
+      "status": "conflicting",
+      "confidence_note": "Setup documentation misleads incoming developers.",
+      "owner": "rohan",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-c3-1",
+          "claim_id": "claim-c3",
+          "activity_item_id": null,
+          "source_id": "src-readme",
+          "source_title": "CampusConnect Project README",
+          "quote": "Database: PostgreSQL 15 (Requires local PostgreSQL instance running on port 5432...)",
+          "locator": "README_project.md:Line 7"
+        },
+        {
+          "id": "ev-c3-2",
+          "claim_id": "claim-c3",
+          "activity_item_id": null,
+          "source_id": "src-chat",
+          "source_title": "Team Chat Logs",
+          "quote": "msg-14 by aman: switched the local and staging DB to SQLite because college server can't run a database service.",
+          "locator": "chat.json:msg-14"
+        }
+      ]
+    },
+    {
+      "id": "claim-g1",
+      "project_id": "proj-campusconnect",
+      "type": "gap",
+      "statement": "Branch 'aman/notif-wip' contains 14 push notification commits spanning 3 weeks that are not tracked in tasks or meeting notes.",
+      "status": "missing",
+      "confidence_note": "Substantial undocumented work risks duplicate implementation by incoming developer.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-g1-1",
+          "claim_id": "claim-g1",
+          "activity_item_id": null,
+          "source_id": "src-git-log",
+          "source_title": "Git Commit Log",
+          "quote": "14 commits on branch aman/notif-wip from 1001a01 (Oct 14) to 1014a14 (Nov 04)",
+          "locator": "git_log.json:branch=aman/notif-wip"
+        },
+        {
+          "id": "ev-g1-2",
+          "claim_id": "claim-g1",
+          "activity_item_id": null,
+          "source_id": "src-note-sprint-planning-nov02",
+          "source_title": "Meeting Note: Sprint Planning Nov 02",
+          "quote": "Assigned Neha to start exploring push notifications (T-11) without reference to existing branch",
+          "locator": "notes/sprint_planning_nov02.md"
+        }
+      ]
+    },
+    {
+      "id": "claim-d1",
+      "project_id": "proj-campusconnect",
+      "type": "decision",
+      "statement": "Database was migrated from PostgreSQL to SQLite because the campus staging server cannot run background database services.",
+      "status": "inferred",
+      "confidence_note": "Architectural rationale exists solely in casual chat logs.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-d1-1",
+          "claim_id": "claim-d1",
+          "activity_item_id": null,
+          "source_id": "src-chat",
+          "source_title": "Team Chat Logs",
+          "quote": "msg-14 by aman: FYI switched the local and staging DB to SQLite because college server can't run a database service.",
+          "locator": "chat.json:msg-14"
+        }
+      ]
+    },
+    {
+      "id": "claim-d2",
+      "project_id": "proj-campusconnect",
+      "type": "decision",
+      "statement": "An in-memory TTLCache was introduced to event lookup in commit c94a2b1 without documented rationale, sizing, or invalidation strategy.",
+      "status": "missing",
+      "confidence_note": "No rationale recorded in PRs, commit messages, or chat.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-d2-1",
+          "claim_id": "claim-d2",
+          "activity_item_id": null,
+          "source_id": "src-git-log",
+          "source_title": "Git Commit Log",
+          "quote": "commit c94a2b1: perf: add in-memory TTLCache to event lookup endpoint",
+          "locator": "git_log.json:c94a2b1"
+        }
+      ]
+    },
+    {
+      "id": "claim-o1",
+      "project_id": "proj-campusconnect",
+      "type": "open_loop",
+      "statement": "Outgoing developer promised to confirm SMS gateway API quota limits before wiring alerts, but no confirmation was ever recorded.",
+      "status": "inferred",
+      "confidence_note": "Open loop commitment left unfulfilled in engineering channel.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-o1-1",
+          "claim_id": "claim-o1",
+          "activity_item_id": null,
+          "source_id": "src-chat",
+          "source_title": "Team Chat Logs",
+          "quote": "msg-28 by aman: I will confirm the vendor API quota with the SMS gateway before we wire up ticket SMS alerts.",
+          "locator": "chat.json:msg-28"
+        }
+      ]
+    },
+    {
+      "id": "claim-r1",
+      "project_id": "proj-campusconnect",
+      "type": "state",
+      "statement": "Vendor budget caps SMS and WhatsApp notifications at $1,000 for the semester with Gupshup selected as primary gateway.",
+      "status": "verified",
+      "confidence_note": "Procurement limits established in confidential budget document.",
+      "owner": "rohan",
+      "access_label": "restricted",
+      "review_state": "pending",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-r1-1",
+          "claim_id": "claim-r1",
+          "activity_item_id": null,
+          "source_id": "src-restricted-budget",
+          "source_title": "Vendor Budget & Contract Pricing (Restricted)",
+          "quote": "Gupshup Enterprise Package: Base fee $180/month for up to 25,000 outgoing SMS alerts. Cap first semester to $1,000.",
+          "locator": "restricted/vendor_budget_notes.md:Section 1"
+        }
+      ]
+    },
+    {
+      "id": "claim-norm-1",
+      "project_id": "proj-campusconnect",
+      "type": "state",
+      "statement": "User authentication uses JWT bearer tokens with 24-hour expiration and bcrypt password hashing (12 rounds).",
+      "status": "verified",
+      "confidence_note": "Production verified through merged PR #35 and unit tests.",
+      "owner": "aman",
+      "access_label": "internal",
+      "review_state": "accepted",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-norm-1",
+          "claim_id": "claim-norm-1",
+          "activity_item_id": null,
+          "source_id": "src-pull-requests",
+          "source_title": "GitHub Pull Requests",
+          "quote": "PR #35: feat: JWT authentication and token refresh workflow (merged).",
+          "locator": "pull_requests.json:#35"
+        }
+      ]
+    },
+    {
+      "id": "claim-norm-2",
+      "project_id": "proj-campusconnect",
+      "type": "state",
+      "statement": "CampusConnect provides student events discovery, registration, and attendee RSVP management.",
+      "status": "verified",
+      "confidence_note": "Stated in public project documentation and confirmed by live API routes.",
+      "owner": "rohan",
+      "access_label": "public",
+      "review_state": "accepted",
+      "created_at": "2026-11-06T18:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-norm-2",
+          "claim_id": "claim-norm-2",
+          "activity_item_id": null,
+          "source_id": "src-readme",
+          "source_title": "CampusConnect Project README",
+          "quote": "CampusConnect is a campus event discovery, ticket reservation, and student engagement API.",
+          "locator": "README_project.md:Line 3"
+        }
+      ]
+    }
+  ]
+}

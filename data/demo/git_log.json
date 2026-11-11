@@ -1,0 +1,218 @@
+[
+  {
+    "sha": "a1b2c3d",
+    "author": "aman",
+    "date": "2026-10-05T09:15:00Z",
+    "branch": "main",
+    "message": "chore: initial FastAPI scaffolding and sqlite models",
+    "files": ["main.py", "models.py", "database.py"]
+  },
+  {
+    "sha": "b2c3d4e",
+    "author": "aman",
+    "date": "2026-10-08T11:30:00Z",
+    "branch": "main",
+    "message": "feat: student authentication with password hashing",
+    "files": ["auth.py", "models.py"]
+  },
+  {
+    "sha": "c3d4e5f",
+    "author": "aman",
+    "date": "2026-10-10T14:10:00Z",
+    "branch": "main",
+    "message": "feat: jwt token issuance and validation helper (PR #35)",
+    "files": ["auth.py", "config.py"]
+  },
+  {
+    "sha": "d4e5f6a",
+    "author": "meera",
+    "date": "2026-10-12T16:20:00Z",
+    "branch": "main",
+    "message": "feat: cors configuration for mobile app development",
+    "files": ["main.py"]
+  },
+  {
+    "sha": "e5f6a7b",
+    "author": "aman",
+    "date": "2026-10-15T10:00:00Z",
+    "branch": "main",
+    "message": "feat: event model and listing endpoint with category filter",
+    "files": ["models.py", "routes/events.py"]
+  },
+  {
+    "sha": "f6a7b8c",
+    "author": "aman",
+    "date": "2026-10-16T15:45:00Z",
+    "branch": "main",
+    "message": "feat: pagination for campus event listing (PR #36)",
+    "files": ["routes/events.py", "schemas.py"]
+  },
+  {
+    "sha": "c94a2b1",
+    "author": "aman",
+    "date": "2026-10-20T17:30:00Z",
+    "branch": "main",
+    "message": "perf: add in-memory TTLCache to event lookup endpoint",
+    "files": ["routes/events.py", "utils/cache.py"]
+  },
+  {
+    "sha": "a7b8c9d",
+    "author": "meera",
+    "date": "2026-10-22T13:10:00Z",
+    "branch": "main",
+    "message": "feat: student event registration and RSVP logic (PR #37)",
+    "files": ["routes/events.py", "schemas.py"]
+  },
+  {
+    "sha": "b8c9d0e",
+    "author": "aman",
+    "date": "2026-10-24T09:20:00Z",
+    "branch": "feature/payments",
+    "message": "feat(payments): Razorpay order creation and webhook endpoint stub",
+    "files": ["routes/payments.py", "models.py"]
+  },
+  {
+    "sha": "c0d1e2f",
+    "author": "aman",
+    "date": "2026-10-25T14:40:00Z",
+    "branch": "feature/payments",
+    "message": "feat(payments): add payment verification handler for PR #38",
+    "files": ["routes/payments.py"]
+  },
+  {
+    "sha": "d1e2f3a",
+    "author": "aman",
+    "date": "2026-10-27T10:15:00Z",
+    "branch": "feature/reminders",
+    "message": "feat(T-15): initial event reminder background task scheduler",
+    "files": ["tasks/reminders.py"]
+  },
+  {
+    "sha": "e2f3a4b",
+    "author": "aman",
+    "date": "2026-10-28T16:00:00Z",
+    "branch": "feature/reminders",
+    "message": "fix(T-15): reminder scheduler interval to 15 minutes",
+    "files": ["tasks/reminders.py", "config.py"]
+  },
+  {
+    "sha": "f3a4b5c",
+    "author": "aman",
+    "date": "2026-10-29T11:25:00Z",
+    "branch": "feature/reminders",
+    "message": "refactor(T-15): reminder email payload formatting",
+    "files": ["tasks/reminders.py"]
+  },
+  {
+    "sha": "1001a01",
+    "author": "aman",
+    "date": "2026-10-14T09:00:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: push notification dispatcher stub",
+    "files": ["services/notifications.py"]
+  },
+  {
+    "sha": "1002a02",
+    "author": "aman",
+    "date": "2026-10-16T18:00:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: add FCM credentials loader and payload builder",
+    "files": ["services/notifications.py", "config.py"]
+  },
+  {
+    "sha": "1003a03",
+    "author": "aman",
+    "date": "2026-10-18T10:30:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: device token registration model and sqlite table",
+    "files": ["models.py", "routes/devices.py"]
+  },
+  {
+    "sha": "1004a04",
+    "author": "aman",
+    "date": "2026-10-19T14:15:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: batch token cleanup endpoint for expired tokens",
+    "files": ["routes/devices.py"]
+  },
+  {
+    "sha": "1005a05",
+    "author": "aman",
+    "date": "2026-10-21T11:45:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: asynchronous notification delivery worker",
+    "files": ["services/worker.py"]
+  },
+  {
+    "sha": "1006a06",
+    "author": "aman",
+    "date": "2026-10-23T16:20:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: retry mechanism with exponential backoff",
+    "files": ["services/worker.py"]
+  },
+  {
+    "sha": "1007a07",
+    "author": "aman",
+    "date": "2026-10-25T13:00:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: add notification preference schema for student users",
+    "files": ["schemas.py", "models.py"]
+  },
+  {
+    "sha": "1008a08",
+    "author": "aman",
+    "date": "2026-10-27T08:50:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: topic-based broadcast notifications for announcements",
+    "files": ["services/notifications.py"]
+  },
+  {
+    "sha": "1009a09",
+    "author": "aman",
+    "date": "2026-10-29T17:10:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: handle invalid token errors from FCM gateway",
+    "files": ["services/notifications.py"]
+  },
+  {
+    "sha": "1010a10",
+    "author": "aman",
+    "date": "2026-10-31T12:00:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: metrics counter for delivered and dropped alerts",
+    "files": ["services/metrics.py"]
+  },
+  {
+    "sha": "1011a11",
+    "author": "aman",
+    "date": "2026-11-01T15:30:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: unit tests for notification payload serializer",
+    "files": ["tests/test_notifications.py"]
+  },
+  {
+    "sha": "1012a12",
+    "author": "aman",
+    "date": "2026-11-02T19:00:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: support sound and badge attributes in iOS APNS payload",
+    "files": ["services/notifications.py"]
+  },
+  {
+    "sha": "1013a13",
+    "author": "aman",
+    "date": "2026-11-03T11:15:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: mock FCM gateway client for local development",
+    "files": ["services/fcm_client.py"]
+  },
+  {
+    "sha": "1014a14",
+    "author": "aman",
+    "date": "2026-11-04T14:40:00Z",
+    "branch": "aman/notif-wip",
+    "message": "wip: notification rate limiter prototype",
+    "files": ["services/rate_limit.py"]
+  }
+]

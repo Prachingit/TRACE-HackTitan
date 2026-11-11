@@ -1,0 +1,282 @@
+[
+  {
+    "id": "msg-01",
+    "author": "rohan",
+    "timestamp": "2026-10-04T09:00:00Z",
+    "channel": "#general",
+    "text": "Welcome to the CampusConnect project repo everyone! Let's get the core event platform built."
+  },
+  {
+    "id": "msg-02",
+    "author": "aman",
+    "timestamp": "2026-10-04T09:12:00Z",
+    "channel": "#dev",
+    "text": "Setting up the backend repository structure now with FastAPI."
+  },
+  {
+    "id": "msg-03",
+    "author": "meera",
+    "timestamp": "2026-10-04T09:30:00Z",
+    "channel": "#dev",
+    "text": "Flutter app shell is ready. Waiting for auth endpoints to connect login."
+  },
+  {
+    "id": "msg-04",
+    "author": "aman",
+    "timestamp": "2026-10-05T14:20:00Z",
+    "channel": "#backend",
+    "text": "Pushed initial user schema and hashing utilities to main."
+  },
+  {
+    "id": "msg-05",
+    "author": "rohan",
+    "timestamp": "2026-10-06T10:15:00Z",
+    "channel": "#backend",
+    "text": "Make sure passwords use passlib with bcrypt."
+  },
+  {
+    "id": "msg-06",
+    "author": "aman",
+    "timestamp": "2026-10-06T11:05:00Z",
+    "channel": "#backend",
+    "text": "Yes, using bcrypt with 12 rounds."
+  },
+  {
+    "id": "msg-07",
+    "author": "meera",
+    "timestamp": "2026-10-08T15:00:00Z",
+    "channel": "#dev",
+    "text": "Hitting CORS error when testing auth endpoint from Flutter emulator."
+  },
+  {
+    "id": "msg-08",
+    "author": "meera",
+    "timestamp": "2026-10-09T10:20:00Z",
+    "channel": "#dev",
+    "text": "Submitted a quick PR to enable CORSMiddleware on FastAPI."
+  },
+  {
+    "id": "msg-09",
+    "author": "aman",
+    "timestamp": "2026-10-10T14:30:00Z",
+    "channel": "#backend",
+    "text": "PR #35 merged for JWT tokens. Token lifetime is 24 hours."
+  },
+  {
+    "id": "msg-10",
+    "author": "rohan",
+    "timestamp": "2026-10-12T11:00:00Z",
+    "channel": "#general",
+    "text": "Good progress on auth. Next up is event browsing and filters."
+  },
+  {
+    "id": "msg-11",
+    "author": "meera",
+    "timestamp": "2026-10-14T11:45:00Z",
+    "channel": "#dev",
+    "text": "Can we support category tags like Tech, Cultural, Sports?"
+  },
+  {
+    "id": "msg-12",
+    "author": "aman",
+    "timestamp": "2026-10-14T13:10:00Z",
+    "channel": "#backend",
+    "text": "Yes, added an enum column for event category in the DB."
+  },
+  {
+    "id": "msg-13",
+    "author": "rohan",
+    "timestamp": "2026-10-17T16:00:00Z",
+    "channel": "#backend",
+    "text": "How is the database setup looking on the university staging server?"
+  },
+  {
+    "id": "msg-14",
+    "author": "aman",
+    "timestamp": "2026-10-18T14:22:10Z",
+    "channel": "#backend",
+    "text": "FYI switched the local and staging DB to SQLite because college server can't run a database service."
+  },
+  {
+    "id": "msg-15",
+    "author": "rohan",
+    "timestamp": "2026-10-18T14:35:00Z",
+    "channel": "#backend",
+    "text": "Makes sense for the college demo host. Let's make sure our queries don't use PG-specific syntax."
+  },
+  {
+    "id": "msg-16",
+    "author": "aman",
+    "timestamp": "2026-10-19T10:00:00Z",
+    "channel": "#backend",
+    "text": "PR #36 merged. Pagination defaults to 20 items per page."
+  },
+  {
+    "id": "msg-17",
+    "author": "meera",
+    "timestamp": "2026-10-21T09:40:00Z",
+    "channel": "#dev",
+    "text": "RSVP registration modal is complete. Testing edge cases now."
+  },
+  {
+    "id": "msg-18",
+    "author": "meera",
+    "timestamp": "2026-10-22T14:00:00Z",
+    "channel": "#dev",
+    "text": "PR #37 is up for registration flows."
+  },
+  {
+    "id": "msg-19",
+    "author": "rohan",
+    "timestamp": "2026-10-22T15:30:00Z",
+    "channel": "#dev",
+    "text": "Approved PR #37 and merged."
+  },
+  {
+    "id": "msg-20",
+    "author": "rohan",
+    "timestamp": "2026-10-24T10:00:00Z",
+    "channel": "#general",
+    "text": "Everyone, welcoming Neha who will be joining us next week to take over the backend."
+  },
+  {
+    "id": "msg-21",
+    "author": "neha",
+    "timestamp": "2026-10-24T10:15:00Z",
+    "channel": "#general",
+    "text": "Hi team! Excited to join and contribute to CampusConnect."
+  },
+  {
+    "id": "msg-22",
+    "author": "aman",
+    "timestamp": "2026-10-24T10:30:00Z",
+    "channel": "#general",
+    "text": "Welcome Neha! I will be preparing handover notes and documentation."
+  },
+  {
+    "id": "msg-23",
+    "author": "meera",
+    "timestamp": "2026-10-24T10:45:00Z",
+    "channel": "#general",
+    "text": "Welcome Neha!"
+  },
+  {
+    "id": "msg-24",
+    "author": "aman",
+    "timestamp": "2026-10-25T16:30:00Z",
+    "channel": "#backend",
+    "text": "Opened PR #38 for Razorpay payment integration."
+  },
+  {
+    "id": "msg-25",
+    "author": "rohan",
+    "timestamp": "2026-10-26T17:00:00Z",
+    "channel": "#backend",
+    "text": "Left comments on PR #38. We cannot merge until webhook validation and idempotency are solved."
+  },
+  {
+    "id": "msg-26",
+    "author": "meera",
+    "timestamp": "2026-10-27T11:20:00Z",
+    "channel": "#dev",
+    "text": "Also left a note on PR #38 regarding mobile cancel redirect."
+  },
+  {
+    "id": "msg-27",
+    "author": "aman",
+    "timestamp": "2026-10-28T09:15:00Z",
+    "channel": "#backend",
+    "text": "Noted, I will review the webhook callback handler."
+  },
+  {
+    "id": "msg-28",
+    "author": "aman",
+    "timestamp": "2026-10-29T16:45:00Z",
+    "channel": "#backend",
+    "text": "I will confirm the vendor API quota with the SMS gateway before we wire up ticket SMS alerts."
+  },
+  {
+    "id": "msg-29",
+    "author": "neha",
+    "timestamp": "2026-11-02T10:00:00Z",
+    "channel": "#backend",
+    "text": "Cloned the repo. Setting up my local environment today."
+  },
+  {
+    "id": "msg-30",
+    "author": "neha",
+    "timestamp": "2026-11-02T11:15:00Z",
+    "channel": "#backend",
+    "text": "Quick question: the README mentions Postgres but config uses sqlite:///./campusconnect.db?"
+  },
+  {
+    "id": "msg-31",
+    "author": "rohan",
+    "timestamp": "2026-11-02T11:30:00Z",
+    "channel": "#backend",
+    "text": "Yes, SQLite is correct. The README is outdated, we must fix it."
+  },
+  {
+    "id": "msg-32",
+    "author": "neha",
+    "timestamp": "2026-11-03T14:00:00Z",
+    "channel": "#backend",
+    "text": "Got it running on SQLite! Looking at T-11 push notifications task."
+  },
+  {
+    "id": "msg-33",
+    "author": "meera",
+    "timestamp": "2026-11-04T10:20:00Z",
+    "channel": "#dev",
+    "text": "Hey Aman, are you wrapping up T-15 event reminders? I see commits on the branch."
+  },
+  {
+    "id": "msg-34",
+    "author": "aman",
+    "timestamp": "2026-11-04T10:45:00Z",
+    "channel": "#dev",
+    "text": "Yes, wrote some scheduler logic on feature/reminders. We can sync on who finishes it."
+  },
+  {
+    "id": "msg-35",
+    "author": "rohan",
+    "timestamp": "2026-11-05T09:00:00Z",
+    "channel": "#general",
+    "text": "Remember team: Aman leaves next week. Please keep handover reviews top priority."
+  },
+  {
+    "id": "msg-36",
+    "author": "neha",
+    "timestamp": "2026-11-05T14:15:00Z",
+    "channel": "#backend",
+    "text": "Checking through the open PRs. PR #38 seems to have 3 unresolved review comments."
+  },
+  {
+    "id": "msg-37",
+    "author": "aman",
+    "timestamp": "2026-11-05T14:35:00Z",
+    "channel": "#backend",
+    "text": "Yes, I marked the task Done on the board earlier, but the PR still needs those review changes."
+  },
+  {
+    "id": "msg-38",
+    "author": "neha",
+    "timestamp": "2026-11-06T10:00:00Z",
+    "channel": "#backend",
+    "text": "Understood, I will pair with you on PR #38 next week if needed."
+  },
+  {
+    "id": "msg-39",
+    "author": "meera",
+    "timestamp": "2026-11-06T16:00:00Z",
+    "channel": "#dev",
+    "text": "Pushed analytics dashboard components for sprint demo."
+  },
+  {
+    "id": "msg-40",
+    "author": "rohan",
+    "timestamp": "2026-11-06T17:30:00Z",
+    "channel": "#general",
+    "text": "Great work this week team. Have a good weekend."
+  }
+]
