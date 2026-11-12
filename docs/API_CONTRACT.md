@@ -1,333 +1,56 @@
-# TRACE API Contract & Documentation
+# TRACE API contract (Phase 2)
 
-**Team**: HackTitan  
-**Hackathon**: CodePuneThinkers Round 2  
-**Tagline**: *"When People Leave, Knowledge Shouldn't."*  
-**Base URL**: `http://localhost:8000` (or `VITE_API_URL`)  
+Base path `/api`. Auth is an httpOnly cookie `trace_session` (SameSite=Lax, Secure when `ENV=production`). Errors use `{"detail": "message"}`. Unknown or cross-workspace resources return **404**, never 403, so existence is not leaked. Phase 1's `X-Demo-User` header and `/api/demo/*` endpoints no longer exist.
 
-This document specifies the exact API contract for TRACE Phase 1. Frontend engineers can use the mock JSON examples below to develop against while the API server is running.
+Clearance levels: `public`, `team`, `restricted`. Roles: `admin`, `team_member`, `incoming`, `departing`. `incoming` and `departing` never see restricted sources, in lists, details, or chunks.
 
----
+## Auth
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/auth/signup` | `{name,email,password,confirm_password}`. Password min 10 chars. 409 if email exists (case-insensitive). Sets cookie. Rate limit 5/min. |
+| POST | `/auth/login` | `{email,password}`. Generic 401 "Invalid email or password." Rate limit 10/min. |
+| POST | `/auth/logout` | 204. Clears cookie. |
+| GET | `/auth/me` | Current user, 401 if no session. |
+| POST | `/auth/forgot-password` | 202. Returns an honest "not configured" message unless all four SMTP vars are set. No reset email is sent in this phase. |
 
-## 1. Authentication & Demo Identity Header
+## Workspaces
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/workspaces` | `{name}`. Caller becomes admin. |
+| GET | `/workspaces` | Caller's workspaces with their `role`. |
+| GET | `/workspaces/{id}` | 404 if not a member. |
+| GET | `/workspaces/{id}/members` | Any member. |
+| PATCH | `/workspaces/{id}/members/{user_id}/role` | Admin. Cannot demote last admin. |
+| DELETE | `/workspaces/{id}/members/{user_id}` | Admin. Cannot remove self. 204. |
+| POST | `/workspaces/{id}/invites` | Admin. `{role, expires_hours=48}`. Single-use token. |
+| GET | `/workspaces/{id}/invites` | Admin. |
+| DELETE | `/workspaces/{id}/invites/{invite_id}` | Admin. Revokes. 204. |
+| GET | `/workspaces/invite-preview/{token}` | No auth. Workspace name and role. |
+| POST | `/workspaces/join` | `{token}`. 410 if revoked, used or expired. 409 if already a member. |
 
-In Phase 1, authentication uses a lightweight demo-identity header:
+## Projects
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/projects` | All projects in caller's workspaces. |
+| POST | `/projects` | Admin. `{workspace_id,name,description,category,team_size,technologies,start_date}`. |
+| GET / PATCH / DELETE | `/projects/{id}` | PATCH and DELETE admin only. |
+| GET | `/projects/{id}/members` | Workspace members. |
+| GET | `/projects/{id}/summary` | `source_count, sources_by_type, chunk_count, member_count, claim_count, open_contradiction_count`. All computed from rows. |
 
-```http
-X-Demo-User: usr-meera
-```
+## Sources
+`status`: `queued` -> `parsing` -> `parsed` or `failed` (`error_message` set on failure). Source IDs look like `SRC-1A2B3C4D` and are globally unique.
 
-### Pre-Seeded Demo User Identifiers & Clearances
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/projects/{id}/sources` | Clearance-filtered. Includes `chunk_count`. |
+| GET | `/projects/{id}/sources/{sid}` | |
+| GET | `/projects/{id}/sources/{sid}/chunks?limit&offset` | Limit max 200. |
+| POST | `/projects/{id}/sources/upload` | multipart: `file`, `clearance_level`. Types: pdf, docx, txt, md, csv, json. 400 bad type, spoofed content or empty. 409 duplicate content hash. 413 over 15 MB. Max 50 sources per project. Only admins may set `restricted` (403). |
+| POST | `/projects/{id}/sources/github` | `{repo_url, clearance_level, fetch_commits, fetch_prs, fetch_issues}`. Public repos. Up to 200 commits. `GITHUB_TOKEN` optional. |
+| POST | `/projects/{id}/sources/manual` | `{title, content, clearance_level, author?}`. Parsed immediately. |
+| POST | `/projects/{id}/sources/{sid}/retry` | Only for `failed` or `queued`. |
+| DELETE | `/projects/{id}/sources/{sid}` | Admin. Removes chunks and stored file. 204. |
+| POST | `/projects/{id}/sample` | Admin. Loads the synthetic Atlas files into this project only and marks it `is_synthetic`. Idempotent by content hash. |
 
-| User ID | Role Alias | Name | Role | Clearance / Notes |
-|---|---|---|---|---|
-| `usr-meera` | `admin` | Meera Shah | `admin` | Full clearance (sees public, team, and restricted sources) |
-| `usr-priya` | `incoming` | Priya Nair | `incoming` | Sees public and team sources (restricted sources hidden) |
-| `usr-rahul` | `departing` | Rahul Verma | `departing` | Sees public and team sources (restricted sources hidden) |
-| `usr-ankit` | `team_member`| Ankit Rao | `team_member`| General team member clearance |
-
-> **Note**: Missing or invalid `X-Demo-User` on protected routes returns `HTTP 401 Unauthorized` with `{"detail": "..."}`.
-
----
-
-## 2. Endpoints Specification
-
-### 2.1 Health Check
-- **Method**: `GET`
-- **Path**: `/api/health`
-- **Auth**: None required
-- **Description**: Verifies service status and database connectivity.
-
-#### Example Request
-```http
-GET /api/health HTTP/1.1
-Host: localhost:8000
-```
-
-#### Example Response (`200 OK`)
-```json
-{
-  "status": "ok",
-  "version": "1.0.0",
-  "db": "ok"
-}
-```
-
----
-
-### 2.2 Load / Reset Demo Workspace
-- **Method**: `POST`
-- **Path**: `/api/demo/load`
-- **Auth**: Optional / None required
-- **Description**: Idempotently seeds the Atlas Workspace, users, memberships, project, and registers all synthetic sources.
-
-#### Example Request
-```http
-POST /api/demo/load HTTP/1.1
-Host: localhost:8000
-```
-
-#### Example Response (`200 OK`)
-```json
-{
-  "project_id": "prj-atlas-core",
-  "workspace_id": "ws-atlas",
-  "sources_registered": 7
-}
-```
-
----
-
-### 2.3 Current User Profile
-- **Method**: `GET`
-- **Path**: `/api/me`
-- **Headers**: `X-Demo-User: usr-meera`
-- **Description**: Resolves active user profile, assigned workspace, and role.
-
-#### Example Request
-```http
-GET /api/me HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-{
-  "id": "usr-meera",
-  "name": "Meera Shah",
-  "email": "meera.shah@example.com",
-  "role": "admin",
-  "workspace_id": "ws-atlas",
-  "workspace_name": "Atlas Workspace"
-}
-```
-
----
-
-### 2.4 List Projects
-- **Method**: `GET`
-- **Path**: `/api/projects`
-- **Headers**: `X-Demo-User: usr-meera`
-- **Description**: Lists projects accessible within the current user's workspace.
-
-#### Example Request
-```http
-GET /api/projects HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-[
-  {
-    "id": "prj-atlas-core",
-    "workspace_id": "ws-atlas",
-    "name": "Atlas Core Platform",
-    "description": "Enterprise context and activity management engine (Synthetic Hackathon Demo).",
-    "category": "Platform Infrastructure",
-    "team_size": 4,
-    "technologies": "Python, FastAPI, SQLite, React, Vite",
-    "start_date": "2026-10-01T09:00:00Z",
-    "is_synthetic": true,
-    "created_at": "2026-11-12T10:00:00Z"
-  }
-]
-```
-
----
-
-### 2.5 Get Project Detail
-- **Method**: `GET`
-- **Path**: `/api/projects/{id}`
-- **Headers**: `X-Demo-User: usr-meera`
-- **Description**: Retrieves single project metadata including synthetic flag.
-
-#### Example Request
-```http
-GET /api/projects/prj-atlas-core HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-{
-  "id": "prj-atlas-core",
-  "workspace_id": "ws-atlas",
-  "name": "Atlas Core Platform",
-  "description": "Enterprise context and activity management engine (Synthetic Hackathon Demo).",
-  "category": "Platform Infrastructure",
-  "team_size": 4,
-  "technologies": "Python, FastAPI, SQLite, React, Vite",
-  "start_date": "2026-10-01T09:00:00Z",
-  "is_synthetic": true,
-  "created_at": "2026-11-12T10:00:00Z"
-}
-```
-
----
-
-### 2.6 Get Project Members
-- **Method**: `GET`
-- **Path**: `/api/projects/{id}/members`
-- **Headers**: `X-Demo-User: usr-meera`
-- **Description**: Returns team members associated with the project's workspace.
-
-#### Example Request
-```http
-GET /api/projects/prj-atlas-core/members HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-[
-  {
-    "user_id": "usr-meera",
-    "name": "Meera Shah",
-    "email": "meera.shah@example.com",
-    "role": "admin"
-  },
-  {
-    "user_id": "usr-priya",
-    "name": "Priya Nair",
-    "email": "priya.nair@example.com",
-    "role": "incoming"
-  },
-  {
-    "user_id": "usr-rahul",
-    "name": "Rahul Verma",
-    "email": "rahul.verma@example.com",
-    "role": "departing"
-  },
-  {
-    "user_id": "usr-ankit",
-    "name": "Ankit Rao",
-    "email": "ankit.rao@example.com",
-    "role": "team_member"
-  }
-]
-```
-
----
-
-### 2.7 Get Project Sources (With Role Clearance Filtering)
-- **Method**: `GET`
-- **Path**: `/api/projects/{id}/sources`
-- **Headers**: `X-Demo-User: <user_id>`
-- **Description**: Returns registered sources.
-  - **Admin View (`usr-meera`)**: Returns all 7 sources including `restricted_internal.md`.
-  - **Incoming View (`usr-priya`) / Departing View (`usr-rahul`)**: Automatically excludes `restricted_internal.md` (returns 6 sources).
-
-#### Example Request (Admin View)
-```http
-GET /api/projects/prj-atlas-core/sources HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-[
-  {
-    "id": "SRC-001",
-    "type": "github_commits",
-    "filename": "commits.json",
-    "status": "registered",
-    "clearance_level": "team",
-    "source_timestamp": "2026-11-10T11:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-002",
-    "type": "csv",
-    "filename": "tasks.csv",
-    "status": "registered",
-    "clearance_level": "team",
-    "source_timestamp": "2026-11-09T10:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-003",
-    "type": "markdown",
-    "filename": "meeting_notes.md",
-    "status": "registered",
-    "clearance_level": "team",
-    "source_timestamp": "2026-11-02T10:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-004",
-    "type": "chat_json",
-    "filename": "chat.json",
-    "status": "registered",
-    "clearance_level": "team",
-    "source_timestamp": "2026-11-10T17:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-005",
-    "type": "markdown",
-    "filename": "docs/architecture.md",
-    "status": "registered",
-    "clearance_level": "public",
-    "source_timestamp": "2026-11-08T10:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-006",
-    "type": "markdown",
-    "filename": "docs/api_notes.md",
-    "status": "registered",
-    "clearance_level": "public",
-    "source_timestamp": "2026-11-01T10:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  },
-  {
-    "id": "SRC-007",
-    "type": "markdown",
-    "filename": "restricted_internal.md",
-    "status": "registered",
-    "clearance_level": "restricted",
-    "source_timestamp": "2026-10-25T10:00:00Z",
-    "uploaded_at": "2026-11-12T10:00:00Z"
-  }
-]
-```
-
----
-
-### 2.8 Get Project Summary
-- **Method**: `GET`
-- **Path**: `/api/projects/{id}/summary`
-- **Headers**: `X-Demo-User: usr-meera`
-- **Description**: Returns live counts computed strictly from SQLite database rows. Counts are 0 before extraction and contradiction phases.
-
-#### Example Request
-```http
-GET /api/projects/prj-atlas-core/summary HTTP/1.1
-Host: localhost:8000
-X-Demo-User: usr-meera
-```
-
-#### Example Response (`200 OK`)
-```json
-{
-  "project_id": "prj-atlas-core",
-  "project_name": "Atlas Core Platform",
-  "is_synthetic": true,
-  "source_count": 7,
-  "sources_by_type": {
-    "github_commits": 1,
-    "csv": 1,
-    "markdown": 4,
-    "chat_json": 1
-  },
-  "member_count": 4,
-  "claim_count": 0,
-  "open_contradiction_count": 0
-}
-```
+## Chunk locators
+Markdown/TXT `L12-L20`; PDF `page:3`; DOCX `para:4-7` or `table:1:row:2`; CSV `row:5`; chat/generic JSON `idx:n`; commit JSON and GitHub `sha:...`, `pr:N`, `issue:N`; manual `manual`.

@@ -1,66 +1,84 @@
-"""Authentication and identity dependencies for TRACE.
+"""Authentication and identity dependencies for TRACE — Phase 2 (real JWT auth)."""
 
-In Phase 1, auth is powered by a clean demo-identity dependency:
-The client passes `X-Demo-User` (user id or role alias), and the backend
-resolves the User and Membership record. Unknown users return HTTP 401.
-"""
-
-from typing import Optional
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.security import COOKIE_NAME, decode_access_token
 from app.db import get_db
 from app.models import Membership, User, Workspace
 
 
 class CurrentUser:
-    def __init__(self, user: User, membership: Optional[Membership], role: str, workspace: Optional[Workspace]):
+    def __init__(
+        self,
+        user: User,
+        membership: "Membership | None",
+        role: str,
+        workspace: "Workspace | None",
+    ):
         self.id = user.id
         self.name = user.name
         self.email = user.email
         self.role = role
-        self.workspace_id = workspace.id if workspace else "default"
-        self.workspace_name = workspace.name if workspace else "Default Workspace"
+        self.workspace_id = workspace.id if workspace else None
+        self.workspace_name = workspace.name if workspace else None
         self.user = user
         self.membership = membership
 
+    def require_admin(self) -> None:
+        if self.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required.",
+            )
+
 
 def get_current_user(
-    x_demo_user: Optional[str] = Header(None, alias="X-Demo-User"),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> CurrentUser:
-    """Resolve current user from X-Demo-User header.
-    
-    Returns 401 if header is missing or user does not exist.
-    """
-    if not x_demo_user:
+    """Resolve current user from httpOnly JWT cookie."""
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing demo authentication header: X-Demo-User",
+            detail="Not authenticated.",
         )
-
-    # 1. Look up by User.id
-    user = db.query(User).filter(User.id == x_demo_user).first()
-
-    # 2. Look up by email or role alias if user ID not directly matched
-    if not user:
-        # Check if x_demo_user is an email or role-based alias (admin, incoming, departing)
-        user = db.query(User).filter((User.email == x_demo_user) | (User.role_default == x_demo_user)).first()
-
-    # 3. If still not found, check membership role match
-    if not user:
-        membership = db.query(Membership).filter(Membership.role == x_demo_user).first()
-        if membership:
-            user = db.query(User).filter(User.id == membership.user_id).first()
-
+    user_id = decode_access_token(token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or invalid.",
+        )
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Unknown demo user: '{x_demo_user}'",
+            detail="User not found.",
         )
-
     membership = db.query(Membership).filter(Membership.user_id == user.id).first()
     role = membership.role if membership else user.role_default
-    workspace = membership.workspace if membership else db.query(Workspace).first()
-
+    workspace = membership.workspace if membership else None
     return CurrentUser(user=user, membership=membership, role=role, workspace=workspace)
+
+
+def get_workspace_membership(
+    workspace_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Membership:
+    """Return the user's membership in a specific workspace, or 404."""
+    membership = (
+        db.query(Membership)
+        .filter(
+            Membership.user_id == current_user.id,
+            Membership.workspace_id == workspace_id,
+        )
+        .first()
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found.",
+        )
+    return membership

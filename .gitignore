@@ -60,3 +60,8 @@ yarn-error.log*
 *~
 .DS_Store
 Thumbs.db
+
+# Phase 2 runtime and build output
+backend/static/
+backend/data/uploads/
+frontend/dist/

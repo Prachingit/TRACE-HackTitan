@@ -1,35 +1,46 @@
-"""FastAPI application for TRACE.
+"""FastAPI application for TRACE — Phase 2.
 
 Team HackTitan - CodePuneThinkers Hackathon Round 2.
 Tagline: 'When People Leave, Knowledge Shouldn't.'
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.db import SessionLocal, init_db
-from app.models import Project
-from app.routers import demo, health, projects
-from app.services.seed import seed_atlas
+from app.db import SessionLocal
+from app.routers import auth, health, projects, sources, workspaces
+from app.routers.auth import limiter
+from app.services.background import reset_stuck_sources
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Initialize DB tables
-    init_db()
+    # Apply Alembic migrations (never drop/recreate tables)
+    from alembic import command
+    from alembic.config import Config
 
-    # 2. Deploy-readiness: auto-seed demo dataset on first start if DB is empty
-    if settings.AUTO_SEED_ON_STARTUP:
-        db = SessionLocal()
-        try:
-            if db.query(Project).count() == 0:
-                print("[TRACE Startup] Database empty. Auto-seeding Atlas Workspace...")
-                seed_atlas(db=db)
-                print("[TRACE Startup] Auto-seed complete.")
-        finally:
-            db.close()
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
+    command.upgrade(cfg, "head")
+
+    # Reset any sources stuck in 'parsing' from a previous crash
+    db = SessionLocal()
+    try:
+        count = reset_stuck_sources(db)
+        if count:
+            print(f"[TRACE Startup] Reset {count} stuck source(s) to 'queued'.")
+    finally:
+        db.close()
 
     yield
 
@@ -37,11 +48,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TRACE API",
     description="Team Records, Activity & Context Engine API (Team HackTitan)",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
-# CORS configuration
+# Rate-limit error handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS (dev only — in production, frontend is served from same origin)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -50,10 +65,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# Register API routers
 app.include_router(health.router)
-app.include_router(demo.router)
+app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(projects.router)
+app.include_router(sources.router)
+
+# Serve built React frontend (single-origin deploy)
+if STATIC_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        index = STATIC_DIR / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        return {"detail": "Frontend not built yet."}
 
 
 if __name__ == "__main__":
@@ -65,3 +93,5 @@ if __name__ == "__main__":
         port=settings.PORT,
         reload=(settings.ENV == "development"),
     )
+
+

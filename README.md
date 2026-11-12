@@ -1,174 +1,52 @@
-# TRACE — Team Records, Activity & Context Engine
+# TRACE
 
-> **Tagline**: *"When People Leave, Knowledge Shouldn't."*  
-> **Built by**: Team HackTitan for Round 2 of the CodePuneThinkers Hackathon  
-> **Phase**: Phase 1 — Foundation & Data Architecture  
+**Team Records, Activity & Context Engine** (Team HackTitan). *When people leave, knowledge shouldn't.*
 
-TRACE reconstructs project history from scattered sources (GitHub commits, markdown docs, meeting notes, task CSVs, engineering chat exports), builds an evidence-backed knowledge base, flags contradictions and gaps, and produces an approved handover for an incoming team member.
+TRACE ingests scattered project data and, in later phases, builds an evidence-linked handover. **Phase 2 (this state)** is live multi-source ingestion: real accounts, workspaces, invites, tenant isolation, and three ways to add data (file upload, GitHub import, manual entry). There is no LLM, claim extraction, contradiction detection or handover logic yet.
 
-The **Handover Center** is the hero feature of the platform.
+## Run locally
 
----
+Requires Python 3.11+ and Node 20+.
 
-## 1. Repository Layout
-
-```text
-TRACE/
-├── backend/
-│   ├── app/
-│   │   ├── main.py            # FastAPI app, CORS, router registration, auto-seed
-│   │   ├── config.py          # Settings from env (PORT, DATABASE_URL, origins)
-│   │   ├── db.py              # SQLite engine, session factory, init_db()
-│   │   ├── models.py          # Complete SQLAlchemy 2.x models (all 15 tables)
-│   │   ├── schemas.py         # Pydantic v2 schemas mirroring the API contract
-│   │   ├── deps.py            # Current-user / role dependency (X-Demo-User)
-│   │   ├── routers/
-│   │   │   ├── health.py      # GET /api/health
-│   │   │   ├── demo.py        # POST /api/demo/load, GET /api/me
-│   │   │   └── projects.py    # GET /api/projects, /members, /sources, /summary
-│   │   └── services/
-│   │       └── seed.py        # Loads Atlas Workspace into SQLite (idempotent)
-│   ├── data/
-│   │   └── atlas/             # Synthetic "Atlas Workspace" dataset
-│   │       ├── commits.json   # 30 commits with feature streams
-│   │       ├── tasks.csv      # 18 tasks with assignees, status, modules
-│   │       ├── meeting_notes.md # 3 sprint & handover kickoff meetings
-│   │       ├── chat.json      # 45 engineering messages across 3 channels
-│   │       ├── docs/          # architecture.md and api_notes.md
-│   │       └── restricted_internal.md # Confidential operational notes (restricted)
-│   ├── tests/
-│   │   ├── test_api.py        # Health, auth, demo load, summary, clearance
-│   │   └── test_seed.py       # Seeder idempotency & source clearance levels
-│   └── requirements.txt       # Pinned dependencies
-├── frontend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── client.js      # Fetch wrapper with VITE_API_URL & X-Demo-User
-│   │   ├── components/
-│   │   │   ├── Sidebar.jsx    # Navigation with Handover Center featured as HERO
-│   │   │   ├── Layout.jsx     # Header with tagline & Demo Role Switcher
-│   │   │   ├── StatusBadge.jsx # Clearance & status visual badges
-│   │   │   ├── StatCard.jsx   # Metrics card component
-│   │   │   ├── EmptyState.jsx # Honest "Coming in a later phase" placeholder
-│   │   │   └── Loading.jsx    # Minimal spinner
-│   │   ├── pages/
-│   │   │   ├── Overview.jsx   # Hero overview, seed button, stats, sources table
-│   │   │   └── PlaceholderPages.jsx # Honest placeholders for roadmap tabs
-│   │   ├── styles/
-│   │   │   └── tokens.css     # Restrained enterprise palette & CSS variables
-│   │   ├── App.jsx            # React Router tree
-│   │   └── main.jsx           # Entrypoint
-│   ├── package.json
-│   ├── vite.config.js
-│   └── index.html
-├── docs/
-│   └── API_CONTRACT.md        # Comprehensive contract with mock JSON examples
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
----
-
-## 2. Complete Database Schema (Phase 1 Defined)
-
-All tables and foreign key relationships are defined upfront to prevent migrations in future phases:
-- `User`: Identity, name, email, nullable password hash, default role.
-- `Workspace`: Workspace container (`Atlas Workspace`).
-- `Membership`: User role within workspace (`admin`, `team_member`, `incoming`, `departing`).
-- `Project`: Project metadata, category, team size, `is_synthetic` boolean flag.
-- `Source`: Ingested artifacts with clearance levels (`public`, `team`, `restricted`) and status.
-- `Chunk`: Atomic source segments (lines/commits/paragraphs) for Phase 3 ingestion.
-- `Claim`: Evidence-backed factual assertions with verification status.
-- `ClaimEvidence`: Citations linking claims to chunks and sources.
-- `Contradiction`: Flagged rule violations, severity, and suggested resolutions.
-- `ContradictionClaim`: Many-to-many relationship linking contradictions to claims.
-- `InterviewQuestion`: Targeted exit questions for outgoing team members.
-- `ReviewEvent`: Human review decisions (`approve`, `edit`, `reject`, `flag`).
-- `Handover`: Core handover record connecting departing and incoming engineers.
-- `HandoverSection`: Structured modular sections within a handover.
-- `OnboardingProgress`: Checklist tracking incoming engineer's comprehension.
-
----
-
-## 3. Authentication in Phase 1
-
-Phase 1 intentionally avoids full JWT / OAuth login infrastructure. Instead, authentication uses a clean demo-identity dependency:
-- The frontend sends the user ID or role via the `X-Demo-User` header.
-- The backend dependency `get_current_user` in [`backend/app/deps.py`](file:///C:/Users/singh/TRACE/backend/app/deps.py) resolves the User and Membership record.
-- If the header is missing or the user does not exist, the API returns `HTTP 401 Unauthorized`.
-- In the frontend header, the **Demo Role Switcher** allows toggling in real-time between:
-  - **Admin (Meera Shah)**: Full clearance — views all sources including restricted records.
-  - **Incoming (Priya Nair)**: Restricted internal records are hidden by the backend.
-  - **Departing (Rahul Verma)**: Restricted internal records are hidden by the backend.
-
----
-
-## 4. Quickstart Guide
-
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ & npm
-
-### Backend Setup & Execution
-From the project root:
-```bash
+```powershell
+# Backend (terminal 1)
 cd backend
-
-# 1. Install dependencies
 pip install -r requirements.txt
+copy ..\.env.example .env        # optional; dev defaults work without it
+python -m uvicorn app.main:app --reload --port 8000
 
-# 2. Start the FastAPI development server
-uvicorn app.main:app --reload --port 8000
-```
-- Interactive API Docs (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
-- Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-
-> **Deploy Readiness**: If started against an empty database, the backend automatically seeds the Atlas Workspace on startup so ephemeral containers never come up blank.
-
-### Frontend Setup & Execution
-In a separate terminal:
-```bash
+# Frontend (terminal 2) - Vite proxies /api to :8000
 cd frontend
-
-# 1. Install dependencies
-npm install
-
-# 2. Start the Vite development server
-npm run dev
+npm.cmd install
+npm.cmd run dev                  # http://localhost:5173
 ```
-- Frontend application runs at: [http://localhost:5173](http://localhost:5173)
 
----
+Migrations run automatically at backend startup (`alembic upgrade head`). To create one after a model change: `cd backend; python -m alembic revision --autogenerate -m "message"`. Never delete the database to apply schema changes.
 
-## 5. Running Backend Tests
+### Single origin (production style)
+```powershell
+cd frontend; npm.cmd run build; Copy-Item dist ..\backend\static -Recurse
+cd ..\backend; python -m uvicorn app.main:app --port 8000   # app and API at http://localhost:8000
+```
 
-Run all unit and integration tests using `pytest`:
+### Docker
 ```bash
-cd backend
-python -m pytest -v
+docker build -t trace .
+docker run -p 8000:8000 -e SECRET_KEY=$(python -c "import secrets;print(secrets.token_urlsafe(48))") -v trace-data:/data trace
+```
+`ENV=production` refuses to start without a strong `SECRET_KEY`. The `/data` volume holds the SQLite file and uploads; without a volume they are lost on redeploy.
+
+## Test
+```powershell
+cd backend; python -m pytest -v
 ```
 
-The test suite validates:
-1. `GET /api/health` returns status `ok` and database connectivity.
-2. `POST /api/demo/load` idempotency (running multiple times creates zero duplicate rows).
-3. `GET /api/me` resolves the active demo user and workspace.
-4. Missing or unknown `X-Demo-User` returns `HTTP 401`.
-5. `GET /api/projects/{id}/sources` returns all 7 sources for `admin`, but excludes restricted sources for `incoming` and `departing` roles.
-6. `GET /api/projects/{id}/summary` matches live database counts with claims and contradictions starting at 0.
-7. Seeder source registration and metadata checks.
+## Configuration (see `.env.example`)
+`SECRET_KEY` (required in production), `DATABASE_URL`, `DATA_DIR`, `GITHUB_TOKEN` (optional), `SMTP_*` (optional; password reset stays disabled without them), `ALLOWED_ORIGINS` (dev only).
 
----
-
-## 6. Synthetic Atlas Dataset & Planted Cases
-
-Located in `backend/data/atlas/`, the synthetic Atlas Workspace features:
-- **Team**: Rahul Verma (departing backend), Priya Nair (incoming backend), Ankit Rao (frontend/DevOps), Meera Shah (admin/lead).
-- **Planted Test Cases**:
-  1. *Conflicting Ownership*: `tasks.csv` assigns payments to Rahul; `meeting_notes.md` assigns it to Ankit.
-  2. *Complete Without Evidence*: Task "Payment gateway integration" is marked Done in `tasks.csv`, but no commit touches payment code.
-  3. *Undocumented Decision*: `chat.json` shows switch from in-memory cache to Redis; `architecture.md` still says in-memory LRU.
-  4. *Unresolved Dependency & Orphan*: "Payment testing" depends on gateway integration; "Database backup" task has no assignee.
-  5. *Stale Update*: Notification retry task in `tasks.csv` has no activity for 5+ weeks.
-  6. *Restricted Record*: `restricted_internal.md` carries `clearance_level = "restricted"` and is hidden from non-admin roles.
-  7. *Auth Module*: Commit "Added JWT authentication middleware", meeting notes note auth testing is pending, task remains in-progress.
+## Notes
+- API reference: [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
+- Atlas sample data (`backend/data/atlas/`) is fictional and loads only when an admin clicks "Load sample project data" on a project.
+- Scanned PDFs fail with a clear message; OCR is not supported.
+- SQLite and local file storage suit a single instance. Use a persistent disk when hosting.
+- Background parsing runs in-process; sources left `parsing` after a crash are reset to `queued` on startup.

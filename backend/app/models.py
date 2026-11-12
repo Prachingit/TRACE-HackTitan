@@ -100,7 +100,7 @@ class Source(Base):
     type = Column(
         String(32),
         CheckConstraint(
-            "type IN ('github_commits', 'markdown', 'pdf', 'csv', 'chat_json', 'manual')",
+            "type IN ('github_commits', 'markdown', 'pdf', 'csv', 'chat_json', 'manual', 'docx', 'txt', 'json')",
             name="check_source_type",
         ),
         nullable=False,
@@ -116,16 +116,38 @@ class Source(Base):
     )
     status = Column(
         String(32),
-        CheckConstraint("status IN ('registered', 'parsing', 'parsed', 'failed')", name="check_source_status"),
+        CheckConstraint("status IN ('registered', 'queued', 'parsing', 'parsed', 'failed')", name="check_source_status"),
         nullable=False,
         default="registered",
     )
     error_message = Column(Text, nullable=True)
     content_hash = Column(String(128), nullable=True)
+    file_path = Column(String(512), nullable=True)  # Stored path under DATA_DIR
 
     project = relationship("Project", back_populates="sources")
     chunks = relationship("Chunk", back_populates="source", cascade="all, delete-orphan")
     evidences = relationship("ClaimEvidence", back_populates="source", cascade="all, delete-orphan")
+
+
+class Invite(Base):
+    __tablename__ = "invites"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    workspace_id = Column(String(64), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(
+        String(32),
+        CheckConstraint("role IN ('admin', 'team_member', 'incoming', 'departing')", name="check_invite_role"),
+        nullable=False,
+    )
+    token = Column(String(128), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_used = Column(Boolean, nullable=False, default=False)
+    is_revoked = Column(Boolean, nullable=False, default=False)
+    created_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    workspace = relationship("Workspace")
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class Chunk(Base):
