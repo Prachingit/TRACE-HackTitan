@@ -1,6 +1,16 @@
 import React from 'react';
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { FolderKanban, Users, Plug, LayoutDashboard, LogOut } from 'lucide-react';
+import {
+  FolderKanban,
+  Users,
+  Plug,
+  LayoutDashboard,
+  LogOut,
+  BookOpen,
+  FileCheck2,
+  AlertTriangle,
+  Activity,
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export function Loading({ label = 'Loading' }) {
@@ -16,9 +26,74 @@ export function EmptyState({ title, children }) {
   );
 }
 
-const STATUS_CLASS = { parsed: 'ok', failed: 'bad', queued: 'warn', parsing: 'info', registered: '' };
+const STATUS_CLASS = {
+  parsed: 'ok',
+  done: 'ok',
+  completed: 'ok',
+  resolved: 'ok',
+  failed: 'bad',
+  open: 'bad',
+  queued: 'warn',
+  pending: 'warn',
+  parsing: 'info',
+  running: 'info',
+  registered: '',
+};
+
 export function StatusBadge({ status }) {
-  return <span className={`badge ${STATUS_CLASS[status] || ''}`}>{status}</span>;
+  return (
+    <span className={`badge ${STATUS_CLASS[status] || ''}`}>
+      <span className="badge-dot" />
+      {status}
+    </span>
+  );
+}
+
+const VERIFICATION_META = {
+  verified: { cls: 'ok', label: 'Verified' },
+  inferred: { cls: 'info', label: 'Inferred' },
+  conflicting: { cls: 'bad', label: 'Conflicting' },
+  missing: { cls: 'warn', label: 'Missing' },
+};
+
+export function VerificationBadge({ status }) {
+  const m = VERIFICATION_META[status] || { cls: '', label: status || 'Unknown' };
+  return (
+    <span className={`badge ${m.cls}`}>
+      <span className="badge-dot" />
+      {m.label}
+    </span>
+  );
+}
+
+const ORIGIN_META = {
+  'human-reviewed': { cls: 'ok', label: 'Human-reviewed' },
+  'ai-extracted': { cls: 'info', label: 'AI-extracted' },
+  'rule-extracted': { cls: '', label: 'Rule-extracted' },
+};
+
+export function OriginBadge({ origin }) {
+  const m = ORIGIN_META[origin] || { cls: '', label: origin || 'Rule-extracted' };
+  return (
+    <span className={`badge ${m.cls}`}>
+      <span className="badge-dot" />
+      {m.label}
+    </span>
+  );
+}
+
+export function ProjectSubnav({ projectId }) {
+  if (!projectId) return null;
+  return (
+    <nav className="subnav" aria-label="Project sections">
+      <NavLink to={`/projects/${projectId}`} end>Sources</NavLink>
+      <NavLink to={`/projects/${projectId}/reconstruct`}>Reconstruct</NavLink>
+      <NavLink to={`/projects/${projectId}/activity`}>Activity timeline</NavLink>
+      <NavLink to={`/projects/${projectId}/knowledge`}>Knowledge base</NavLink>
+      <NavLink to={`/projects/${projectId}/ledger`}>Evidence ledger</NavLink>
+      <NavLink to={`/projects/${projectId}/contradictions`}>Contradiction radar</NavLink>
+    </nav>
+  );
 }
 
 export function ProtectedRoute() {
@@ -41,6 +116,10 @@ export function Layout() {
         <nav className="nav">
           <NavLink to="/" end><LayoutDashboard size={16} strokeWidth={1.5} />Overview</NavLink>
           <NavLink to="/projects"><FolderKanban size={16} strokeWidth={1.5} />Projects</NavLink>
+          <NavLink to="/activity"><Activity size={16} strokeWidth={1.5} />Activity</NavLink>
+          <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
+          <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>
+          <NavLink to="/contradictions"><AlertTriangle size={16} strokeWidth={1.5} />Contradictions</NavLink>
           <NavLink to="/team"><Users size={16} strokeWidth={1.5} />Team</NavLink>
           <NavLink to="/integrations"><Plug size={16} strokeWidth={1.5} />Integrations</NavLink>
         </nav>

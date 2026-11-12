@@ -83,6 +83,7 @@ class Project(Base):
     technologies = Column(Text, nullable=True)
     start_date = Column(DateTime(timezone=True), nullable=True)
     is_synthetic = Column(Boolean, nullable=False, default=False)
+    stale_days = Column(Integer, nullable=False, default=28, server_default="28")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     workspace = relationship("Workspace", back_populates="projects")
@@ -173,7 +174,7 @@ class Claim(Base):
     claim_type = Column(
         String(32),
         CheckConstraint(
-            "claim_type IN ('task_status', 'decision', 'ownership', 'blocker', 'dependency', 'contribution', 'doc_gap')",
+            "claim_type IN ('task_status', 'decision', 'ownership', 'blocker', 'dependency', 'contribution', 'testing', 'doc_gap')",
             name="check_claim_type",
         ),
         nullable=False,
@@ -206,6 +207,17 @@ class Claim(Base):
         index=True,
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Phase 3/4 additions
+    title = Column(String(255), nullable=True)
+    owner_name = Column(String(128), nullable=True)
+    author = Column(String(128), nullable=True)
+    extractor = Column(String(16), nullable=False, default="rule", server_default="rule")  # rule | llm
+    event_time = Column(DateTime(timezone=True), nullable=True)
+    task_key = Column(String(255), nullable=True)
+    fingerprint = Column(String(64), nullable=True, index=True)
+    run_id = Column(String(64), nullable=True)
+    attrs_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
 
     project = relationship("Project", back_populates="claims")
     owner = relationship("User")
@@ -250,6 +262,14 @@ class Contradiction(Base):
         default="open",
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Phase 5 additions
+    conflicting_source_ids = Column(Text, nullable=True)  # JSON list
+    fingerprint = Column(String(64), nullable=True, index=True)
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    run_id = Column(String(64), nullable=True)
+    resolved_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolution_note = Column(Text, nullable=True)
 
     project = relationship("Project", back_populates="contradictions")
     claims = relationship("Claim", secondary="contradiction_claims", back_populates="contradictions")
@@ -352,3 +372,60 @@ class OnboardingProgress(Base):
 
     handover = relationship("Handover", back_populates="onboarding_progress")
     user = relationship("User")
+
+
+class Run(Base):
+    """One analysis run. Stages are real rows written as the pipeline progresses."""
+
+    __tablename__ = "runs"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(
+        String(16),
+        CheckConstraint("status IN ('running', 'completed', 'failed')", name="check_run_status"),
+        nullable=False,
+        default="running",
+    )
+    started_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    llm_enabled = Column(Boolean, nullable=False, default=False)
+    error_message = Column(Text, nullable=True)
+    summary_json = Column(Text, nullable=True)  # counts, fallbacks, warnings
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    stages = relationship("RunStage", back_populates="run", cascade="all, delete-orphan", order_by="RunStage.ordinal")
+
+
+class RunStage(Base):
+    __tablename__ = "run_stages"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    run_id = Column(String(64), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    ordinal = Column(Integer, nullable=False)
+    key = Column(String(32), nullable=False)
+    label = Column(String(128), nullable=False)
+    status = Column(
+        String(16),
+        CheckConstraint("status IN ('pending', 'running', 'done', 'failed')", name="check_run_stage_status"),
+        nullable=False,
+        default="pending",
+    )
+    count = Column(Integer, nullable=True)
+    detail = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    run = relationship("Run", back_populates="stages")
+
+
+class ModuleAlias(Base):
+    """User renames/merges of modules; applied on every re-analysis."""
+
+    __tablename__ = "module_aliases"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    alias = Column(String(128), nullable=False)
+    target = Column(String(128), nullable=False)
+

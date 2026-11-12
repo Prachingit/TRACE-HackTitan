@@ -36,7 +36,16 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASS: Optional[str] = None
 
-    @field_validator("SECRET_KEY", "GITHUB_TOKEN", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_PORT", mode="before")
+    # Optional LLM extraction (falls back to deterministic extractor when unset or on error)
+    LLM_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_BASE_URL: str = "https://api.openai.com/v1"
+
+    @field_validator(
+        "SECRET_KEY", "GITHUB_TOKEN", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_PORT",
+        "LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL",
+        mode="before",
+    )
     @classmethod
     def _blank_to_default(cls, v, info):
         if isinstance(v, str) and not v.strip():

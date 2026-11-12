@@ -41,6 +41,15 @@ async function request(path, { method = 'GET', json, form } = {}) {
   return body;
 }
 
+function qs(params = {}) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+  });
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
 export const api = {
   signup: (d) => request('/api/auth/signup', { method: 'POST', json: d }),
   login: (d) => request('/api/auth/login', { method: 'POST', json: d }),
@@ -62,6 +71,7 @@ export const api = {
   projects: () => request('/api/projects'),
   project: (id) => request(`/api/projects/${id}`),
   createProject: (d) => request('/api/projects', { method: 'POST', json: d }),
+  updateProject: (id, d) => request(`/api/projects/${id}`, { method: 'PATCH', json: d }),
   deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),
   summary: (id) => request(`/api/projects/${id}/summary`),
 
@@ -79,6 +89,26 @@ export const api = {
   retrySource: (pid, sid) => request(`/api/projects/${pid}/sources/${sid}/retry`, { method: 'POST' }),
   deleteSource: (pid, sid) => request(`/api/projects/${pid}/sources/${sid}`, { method: 'DELETE' }),
   loadSample: (pid) => request(`/api/projects/${pid}/sample`, { method: 'POST' }),
+
+  // Phase 3: Reconstruction Engine
+  analyze: (pid) => request(`/api/projects/${pid}/analyze`, { method: 'POST' }),
+  latestRun: (pid) => request(`/api/projects/${pid}/runs/latest`),
+  timeline: (pid) => request(`/api/projects/${pid}/timeline`),
+  modules: (pid) => request(`/api/projects/${pid}/modules`),
+  renameModule: (pid, from_module, to_module) =>
+    request(`/api/projects/${pid}/modules/rename`, { method: 'POST', json: { from_module, to_module } }),
+  claims: (pid, filters = {}) => request(`/api/projects/${pid}/claims${qs(filters)}`),
+
+  // Phase 4: Evidence Ledger
+  claimDetail: (cid) => request(`/api/claims/${cid}`),
+  reviewClaim: (cid, d) => request(`/api/claims/${cid}/review`, { method: 'PATCH', json: d }),
+  ledgerValidation: (pid) => request(`/api/projects/${pid}/ledger/validation`),
+
+  // Phase 5: Contradiction Radar
+  contradictions: (pid, filters = {}) => request(`/api/projects/${pid}/contradictions${qs(filters)}`),
+  contradictionDetail: (id) => request(`/api/contradictions/${id}`),
+  resolveContradiction: (id, note) =>
+    request(`/api/contradictions/${id}/resolve`, { method: 'POST', json: { note } }),
 };
 
 export default api;

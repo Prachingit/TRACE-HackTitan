@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 # Common aliases for author/timestamp columns
 AUTHOR_ALIASES = {"author", "user", "assignee", "owner", "reporter", "created_by", "who"}
-TIMESTAMP_ALIASES = {"timestamp", "date", "created_at", "updated_at", "time", "datetime"}
+TIMESTAMP_ALIASES = {"timestamp", "date", "updated", "created_at", "updated_at", "time", "datetime"}
 
 
 def parse_csv(file_path: str) -> List[Tuple[int, str, str, str | None, str | None]]:

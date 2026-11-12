@@ -39,10 +39,16 @@ def parse_json(file_path: str) -> List[Tuple[int, str, str, str | None, str | No
             sha = item.get("sha", "")[:12]
             message = item.get("message") or item.get("commit", {}).get("message", "")
             author = item.get("author") or item.get("commit", {}).get("author", {}).get("name")
-            ts = item.get("timestamp") or item.get("commit", {}).get("author", {}).get("date")
+            ts = item.get("timestamp") or item.get("date") or item.get("commit", {}).get("author", {}).get("date")
+            files = item.get("files") or []
+            names = [f if isinstance(f, str) else (f or {}).get("filename", "") for f in files]
+            names = [n for n in names if n]
             if message:
                 ordinal += 1
-                chunks.append((ordinal, message.strip(), f"sha:{sha}", author, ts))
+                body = message.strip()
+                if names:
+                    body += "\nFiles: " + ", ".join(names)
+                chunks.append((ordinal, body, f"sha:{sha}", author, ts))
     elif _is_slack_or_chat(data):
         # Chat/Slack export: [{user, text, ts, ...}]
         for item in data:
@@ -65,3 +71,4 @@ def parse_json(file_path: str) -> List[Tuple[int, str, str, str | None, str | No
         )
 
     return chunks
+

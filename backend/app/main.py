@@ -16,7 +16,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.db import SessionLocal
-from app.routers import auth, health, projects, sources, workspaces
+from app.routers import analysis, auth, health, projects, sources, workspaces
 from app.routers.auth import limiter
 from app.services.background import reset_stuck_sources
 
@@ -71,6 +71,7 @@ app.include_router(auth.router)
 app.include_router(workspaces.router)
 app.include_router(projects.router)
 app.include_router(sources.router)
+app.include_router(analysis.router)
 
 # Serve built React frontend (single-origin deploy)
 if STATIC_DIR.exists():

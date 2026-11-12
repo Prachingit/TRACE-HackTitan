@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Upload, Trash2, RefreshCw } from 'lucide-react';
+import { Upload, Trash2, RefreshCw, Play } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
-import { EmptyState, Loading, StatusBadge } from '../components/ui';
+import { EmptyState, Loading, ProjectSubnav, StatusBadge } from '../components/ui';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString() : '-');
 
@@ -189,6 +189,15 @@ export function ProjectSources() {
     try { await api.deleteProject(id); nav('/projects'); } catch (x) { setErr(x.message); }
   };
 
+  const runAnalyze = async () => {
+    try {
+      await api.analyze(id);
+      nav(`/projects/${id}/reconstruct`);
+    } catch (x) {
+      setErr(x.message);
+    }
+  };
+
   return (
     <>
       <div className="page-head">
@@ -197,8 +206,12 @@ export function ProjectSources() {
           <p className="muted">{project?.description}</p>
           {project?.is_synthetic && <span className="badge warn">Contains synthetic sample data</span>}
         </div>
-        {isAdmin && <button className="btn danger" onClick={delProject}><Trash2 size={14} strokeWidth={1.5} />Delete project</button>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn primary" onClick={runAnalyze}><Play size={14} strokeWidth={1.5} />Analyze project</button>
+          {isAdmin && <button className="btn danger" onClick={delProject}><Trash2 size={14} strokeWidth={1.5} />Delete project</button>}
+        </div>
       </div>
+      <ProjectSubnav projectId={id} />
       {err && <div className="alert error">{err}</div>}
 
       <h2>Add data</h2>
