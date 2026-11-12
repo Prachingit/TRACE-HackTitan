@@ -1,211 +1,175 @@
-"""Tests for TRACE API endpoints and mock contract validation."""
+"""Comprehensive pytest test suite for TRACE Phase 1.
 
-import json
-from pathlib import Path
+Verifies:
+- Health endpoint status and DB check
+- Demo load idempotency
+- Registered sources count
+- Restricted sources hidden for incoming/departing roles, visible for admin
+- Summary counts computed from database rows
+- 401 on unknown or missing demo user
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app import schemas
-from app.config import settings
-from app.db import SessionLocal
+from app.db import SessionLocal, init_db
 from app.main import app
-from scripts.seed import seed
+from app.models import Membership, Project, Source
+from app.services.seed import seed_atlas
+
+client = TestClient(app)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_database():
-    """Seed the database once for API tests."""
-    seed(reset=True)
+@pytest.fixture(autouse=True)
+def setup_db():
+    """Ensure clean schema and seeded Atlas Workspace before tests."""
+    init_db()
+    seed_atlas()
+    yield
 
 
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-def test_health_check(client):
-    """GET /health returns status: ok."""
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
-def test_get_roles(client):
-    """GET /api/roles returns all 3 seeded roles with clearance."""
-    response = client.get("/api/roles")
-    assert response.status_code == 200
-    roles = response.json()
-    assert len(roles) == 3
-
-    clearance_map = {r["id"]: r["clearance"] for r in roles}
-    assert clearance_map.get("team_lead") == "restricted"
-    assert clearance_map.get("incoming_developer") == "internal"
-    assert clearance_map.get("external_reviewer") == "public"
-
-
-def test_sources_external_reviewer_excludes_internal_and_restricted(client):
-    """external_reviewer (public) sees ONLY public sources."""
-    response = client.get("/api/demo/sources", params={"role": "external_reviewer"})
-    assert response.status_code == 200
-    sources = response.json()
-
-    assert len(sources) > 0
-    for src in sources:
-        assert src["access_label"] == "public", f"Public role saw non-public source: {src}"
-
-    # Specifically verify internal git log and restricted notes are excluded
-    source_ids = {s["id"] for s in sources}
-    assert "src-readme" in source_ids
-    assert "src-git-log" not in source_ids
-    assert "src-restricted-budget" not in source_ids
-
-
-def test_sources_incoming_developer_sees_public_and_internal(client):
-    """incoming_developer (internal) sees public and internal, but NOT restricted."""
-    response = client.get("/api/demo/sources", params={"role": "incoming_developer"})
-    assert response.status_code == 200
-    sources = response.json()
-
-    labels = {s["access_label"] for s in sources}
-    assert "public" in labels
-    assert "internal" in labels
-    assert "restricted" not in labels
-
-    source_ids = {s["id"] for s in sources}
-    assert "src-restricted-budget" not in source_ids
-    assert "src-git-log" in source_ids
-    assert "src-readme" in source_ids
-
-
-def test_sources_team_lead_sees_all(client):
-    """team_lead (restricted) sees public, internal, and restricted sources."""
-    response = client.get("/api/demo/sources", params={"role": "team_lead"})
-    assert response.status_code == 200
-    sources = response.json()
-
-    labels = {s["access_label"] for s in sources}
-    assert "public" in labels
-    assert "internal" in labels
-    assert "restricted" in labels
-
-    source_ids = {s["id"] for s in sources}
-    assert "src-restricted-budget" in source_ids
-    assert "src-git-log" in source_ids
-    assert "src-readme" in source_ids
-
-
-def test_sources_unknown_role_returns_400(client):
-    """Unknown role returns HTTP 400."""
-    response = client.get("/api/demo/sources", params={"role": "super_admin_invalid"})
-    assert response.status_code == 400
-    assert "Unknown role" in response.json()["detail"]
-
-
-def test_contract_endpoint(client):
-    """GET /api/contract returns complete contract schema documentation."""
-    response = client.get("/api/contract")
+def test_health_endpoint():
+    """GET /api/health returns status, version, and db: ok."""
+    response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
+    assert data["status"] == "ok"
     assert data["version"] == "1.0.0"
-    assert "Source" in data["models"]
-    assert "Claim" in data["models"]
-    assert len(data["current_endpoints"]) >= 4
-    assert len(data["planned_endpoints"]) >= 8
+    assert data["db"] == "ok"
 
 
-# --------------------------------------------------------------------------
-# Contract Examples Validation against Pydantic Models in schemas.py
-# --------------------------------------------------------------------------
+def test_demo_load_idempotency():
+    """POST /api/demo/load seeds Atlas Workspace without duplicating rows."""
+    db = SessionLocal()
+    try:
+        initial_projects = db.query(Project).count()
+        initial_sources = db.query(Source).count()
+        initial_memberships = db.query(Membership).count()
 
-def test_validate_handover_mock_against_schema():
-    """Validate contract/examples/handover.json against schemas.Handover."""
-    example_path = Path(settings.CONTRACT_DIR) / "examples" / "handover.json"
-    assert example_path.exists(), f"Missing {example_path}"
+        # Run demo load via API
+        response = client.post("/api/demo/load")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["project_id"] == "prj-atlas-core"
+        assert data["workspace_id"] == "ws-atlas"
+        assert data["sources_registered"] == 7
 
-    with open(example_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Validate with Pydantic model
-    handover = schemas.Handover.model_validate(data)
-    assert handover.id == "ho-campusconnect-01"
-    assert len(handover.claims) >= 10
-
-    # Verify all four statuses exist
-    statuses = {c.status for c in handover.claims}
-    assert "verified" in statuses
-    assert "inferred" in statuses
-    assert "conflicting" in statuses
-    assert "missing" in statuses
-
-    # Verify planted cases are represented
-    claim_ids = {c.id for c in handover.claims}
-    for expected_case in ["claim-c1", "claim-c2", "claim-c3", "claim-g1", "claim-d1", "claim-d2", "claim-o1", "claim-r1"]:
-        assert expected_case in claim_ids, f"Planted case {expected_case} missing from handover.json"
-
-    # Verify evidence constraints
-    for claim in handover.claims:
-        assert len(claim.evidence) >= 1, f"Claim {claim.id} missing evidence"
-        for ev in claim.evidence:
-            assert len(ev.quote) <= 200, f"Quote exceeds 200 chars in {claim.id}: {ev.quote}"
-            assert ev.locator, f"Missing locator in {claim.id}"
+        # Verify no duplicate records were created
+        assert db.query(Project).count() == initial_projects
+        assert db.query(Source).count() == initial_sources
+        assert db.query(Membership).count() == initial_memberships
+    finally:
+        db.close()
 
 
-def test_validate_role_views_mock_against_schema():
-    """Validate contract/examples/role_views.json against schemas.RoleViewsMap."""
-    example_path = Path(settings.CONTRACT_DIR) / "examples" / "role_views.json"
-    assert example_path.exists(), f"Missing {example_path}"
-
-    with open(example_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    role_views = schemas.RoleViewsMap.model_validate(data).root
-    assert "team_lead" in role_views
-    assert "incoming_developer" in role_views
-    assert "external_reviewer" in role_views
-
-    # Check team_lead sees all and hidden_count == 0
-    assert role_views["team_lead"].hidden_count == 0
-    assert len(role_views["team_lead"].handover.claims) == 10
-
-    # Check incoming_developer has restricted items hidden
-    assert role_views["incoming_developer"].hidden_count == 1
-    incoming_labels = {c.access_label for c in role_views["incoming_developer"].handover.claims}
-    assert "restricted" not in incoming_labels
-
-    # Check external_reviewer has internal/restricted hidden
-    assert role_views["external_reviewer"].hidden_count == 9
-    for c in role_views["external_reviewer"].handover.claims:
-        assert c.access_label == "public"
+def test_current_user_me_endpoint():
+    """GET /api/me returns active demo identity and workspace."""
+    response = client.get("/api/me", headers={"X-Demo-User": "usr-meera"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "usr-meera"
+    assert data["role"] == "admin"
+    assert data["workspace_id"] == "ws-atlas"
 
 
-def test_validate_plan_mock_against_schema():
-    """Validate contract/examples/plan.json against schemas.PlanStepList."""
-    example_path = Path(settings.CONTRACT_DIR) / "examples" / "plan.json"
-    assert example_path.exists(), f"Missing {example_path}"
+def test_unauthorized_on_missing_or_unknown_user():
+    """Unknown or missing X-Demo-User returns HTTP 401."""
+    # Missing header
+    res_missing = client.get("/api/me")
+    assert res_missing.status_code == 401
+    assert "Missing demo authentication header" in res_missing.json()["detail"]
 
-    with open(example_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    plan = schemas.PlanStepList.model_validate(data).root
-    assert len(plan) == 5
-    ranks = [p.rank for p in plan]
-    assert ranks == [1, 2, 3, 4, 5]
-    for step in plan:
-        assert step.action
-        assert step.reason
-        assert len(step.claim_ids) >= 1
+    # Unknown user id
+    res_unknown = client.get("/api/projects", headers={"X-Demo-User": "invalid_ghost_user"})
+    assert res_unknown.status_code == 401
+    assert "Unknown demo user" in res_unknown.json()["detail"]
 
 
-def test_validate_gap_questions_mock_against_schema():
-    """Validate contract/examples/gap_questions.json against schemas.GapQuestionList."""
-    example_path = Path(settings.CONTRACT_DIR) / "examples" / "gap_questions.json"
-    assert example_path.exists(), f"Missing {example_path}"
+def test_sources_count_and_clearance_filtering():
+    """Admin sees all 7 sources; incoming and departing roles have restricted hidden."""
+    project_id = "prj-atlas-core"
 
-    with open(example_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    # 1. Admin view (usr-meera) -> 7 sources, including restricted
+    res_admin = client.get(
+        f"/api/projects/{project_id}/sources",
+        headers={"X-Demo-User": "usr-meera"},
+    )
+    assert res_admin.status_code == 200
+    admin_sources = res_admin.json()
+    assert len(admin_sources) == 7
 
-    questions = schemas.GapQuestionList.model_validate(data).root
-    assert len(questions) == 3
-    claim_targets = {q.claim_id for q in questions}
-    assert "claim-d2" in claim_targets  # D2
-    assert "claim-o1" in claim_targets  # O1
+    admin_source_ids = {s["id"] for s in admin_sources}
+    assert "SRC-007" in admin_source_ids
+    restricted_item = next(s for s in admin_sources if s["id"] == "SRC-007")
+    assert restricted_item["clearance_level"] == "restricted"
+    assert restricted_item["filename"] == "restricted_internal.md"
+
+    # 2. Incoming view (usr-priya) -> 6 sources, restricted file excluded
+    res_incoming = client.get(
+        f"/api/projects/{project_id}/sources",
+        headers={"X-Demo-User": "usr-priya"},
+    )
+    assert res_incoming.status_code == 200
+    incoming_sources = res_incoming.json()
+    assert len(incoming_sources) == 6
+    incoming_source_ids = {s["id"] for s in incoming_sources}
+    assert "SRC-007" not in incoming_source_ids
+    assert all(s["clearance_level"] != "restricted" for s in incoming_sources)
+
+    # 3. Departing view (usr-rahul) -> 6 sources, restricted file excluded
+    res_departing = client.get(
+        f"/api/projects/{project_id}/sources",
+        headers={"X-Demo-User": "usr-rahul"},
+    )
+    assert res_departing.status_code == 200
+    departing_sources = res_departing.json()
+    assert len(departing_sources) == 6
+    assert "SRC-007" not in {s["id"] for s in departing_sources}
+
+
+def test_project_summary_matches_database_rows():
+    """Summary counts match live DB row counts; claims and contradictions are 0."""
+    project_id = "prj-atlas-core"
+    db = SessionLocal()
+    try:
+        db_source_count = db.query(Source).filter(Source.project_id == project_id).count()
+        db_member_count = db.query(Membership).filter(Membership.workspace_id == "ws-atlas").count()
+
+        response = client.get(
+            f"/api/projects/{project_id}/summary",
+            headers={"X-Demo-User": "usr-meera"},
+        )
+        assert response.status_code == 200
+        summary = response.json()
+
+        assert summary["project_id"] == project_id
+        assert summary["is_synthetic"] is True
+        assert summary["source_count"] == db_source_count
+        assert summary["member_count"] == db_member_count
+        assert summary["claim_count"] == 0
+        assert summary["open_contradiction_count"] == 0
+
+        # Verify source breakdown
+        assert summary["sources_by_type"]["github_commits"] == 1
+        assert summary["sources_by_type"]["csv"] == 1
+        assert summary["sources_by_type"]["markdown"] == 4
+        assert summary["sources_by_type"]["chat_json"] == 1
+    finally:
+        db.close()
+
+
+def test_project_members_endpoint():
+    """GET /api/projects/{id}/members returns all team members."""
+    response = client.get(
+        "/api/projects/prj-atlas-core/members",
+        headers={"X-Demo-User": "usr-meera"},
+    )
+    assert response.status_code == 200
+    members = response.json()
+    assert len(members) == 4
+
+    role_by_user = {m["user_id"]: m["role"] for m in members}
+    assert role_by_user["usr-meera"] == "admin"
+    assert role_by_user["usr-priya"] == "incoming"
+    assert role_by_user["usr-rahul"] == "departing"
+    assert role_by_user["usr-ankit"] == "team_member"

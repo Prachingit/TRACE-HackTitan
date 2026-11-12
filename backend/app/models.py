@@ -1,12 +1,6 @@
-"""SQLAlchemy 2.0 Database Models for TRACE.
+"""SQLAlchemy 2.x Database Models for TRACE.
 
-DESIGN RULE (Enforced in Phase 7):
-A claim's access_label must equal the STRICTEST label among its evidence sources.
-Ordering: public < internal < restricted.
-- If any evidence source is 'restricted', the claim's access_label must be 'restricted'.
-- If no evidence is 'restricted' but at least one is 'internal', the claim's access_label must be 'internal'.
-- A claim can only be 'public' if all its evidence sources are 'public'.
-The column exists now to support multi-role clearance views from Phase 1 onward.
+Comprehensive schema defined for Phase 1 to prevent migrations in subsequent phases.
 """
 
 import uuid
@@ -14,9 +8,11 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -34,118 +30,166 @@ def generate_uuid() -> str:
     return uuid.uuid4().hex
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=True)  # Nullable for demo users
+    role_default = Column(String(64), nullable=False, default="team_member")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    memberships = relationship("Membership", back_populates="user", cascade="all, delete-orphan")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    memberships = relationship("Membership", back_populates="workspace", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="workspace", cascade="all, delete-orphan")
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String(64), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(
+        String(32),
+        CheckConstraint("role IN ('admin', 'team_member', 'incoming', 'departing')", name="check_membership_role"),
+        nullable=False,
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="memberships")
+    workspace = relationship("Workspace", back_populates="memberships")
+
+
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
+    workspace_id = Column(String(64), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    category = Column(String(128), nullable=True)
+    team_size = Column(Integer, nullable=False, default=1)
+    technologies = Column(Text, nullable=True)
+    start_date = Column(DateTime(timezone=True), nullable=True)
+    is_synthetic = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    workspace = relationship("Workspace", back_populates="projects")
     sources = relationship("Source", back_populates="project", cascade="all, delete-orphan")
     claims = relationship("Claim", back_populates="project", cascade="all, delete-orphan")
+    contradictions = relationship("Contradiction", back_populates="project", cascade="all, delete-orphan")
     handovers = relationship("Handover", back_populates="project", cascade="all, delete-orphan")
-
-
-class Role(Base):
-    __tablename__ = "roles"
-
-    id = Column(String(64), primary_key=True)  # e.g. team_lead, incoming_developer, external_reviewer
-    name = Column(String(255), nullable=False)
-    clearance = Column(
-        String(32),
-        CheckConstraint("clearance IN ('public', 'internal', 'restricted')", name="check_role_clearance"),
-        nullable=False,
-    )
 
 
 class Source(Base):
     __tablename__ = "sources"
 
-    id = Column(String(64), primary_key=True, default=generate_uuid)
+    id = Column(String(64), primary_key=True)  # E.g. SRC-001
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     type = Column(
         String(32),
-        CheckConstraint("type IN ('git', 'pr', 'task', 'note', 'chat', 'doc')", name="check_source_type"),
+        CheckConstraint(
+            "type IN ('github_commits', 'markdown', 'pdf', 'csv', 'chat_json', 'manual')",
+            name="check_source_type",
+        ),
         nullable=False,
     )
-    title = Column(String(255), nullable=False)
-    origin_ref = Column(String(500), nullable=False)
-    access_label = Column(
+    filename = Column(String(255), nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    source_timestamp = Column(DateTime(timezone=True), nullable=True)
+    clearance_level = Column(
         String(32),
-        CheckConstraint("access_label IN ('public', 'internal', 'restricted')", name="check_source_access_label"),
+        CheckConstraint("clearance_level IN ('public', 'team', 'restricted')", name="check_source_clearance"),
         nullable=False,
         index=True,
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    status = Column(
+        String(32),
+        CheckConstraint("status IN ('registered', 'parsing', 'parsed', 'failed')", name="check_source_status"),
+        nullable=False,
+        default="registered",
+    )
+    error_message = Column(Text, nullable=True)
+    content_hash = Column(String(128), nullable=True)
 
     project = relationship("Project", back_populates="sources")
-    activity_items = relationship("ActivityItem", back_populates="source", cascade="all, delete-orphan")
+    chunks = relationship("Chunk", back_populates="source", cascade="all, delete-orphan")
     evidences = relationship("ClaimEvidence", back_populates="source", cascade="all, delete-orphan")
 
 
-class ActivityItem(Base):
-    """Filled in Phase 3; table and columns created in Phase 1."""
-    __tablename__ = "activity_items"
+class Chunk(Base):
+    __tablename__ = "chunks"
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
     source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
-    kind = Column(String(64), nullable=False)
+    ordinal = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
     author = Column(String(128), nullable=True)
     timestamp = Column(DateTime(timezone=True), nullable=True)
-    text = Column(Text, nullable=False)
-    ref = Column(String(500), nullable=True)
-    access_label = Column(
-        String(32),
-        CheckConstraint("access_label IN ('public', 'internal', 'restricted')", name="check_activity_access_label"),
-        nullable=False,
-        index=True,
-    )
+    locator = Column(String(255), nullable=True)
 
-    source = relationship("Source", back_populates="activity_items")
-    evidences = relationship("ClaimEvidence", back_populates="activity_item")
+    source = relationship("Source", back_populates="chunks")
+    evidences = relationship("ClaimEvidence", back_populates="chunk")
 
 
 class Claim(Base):
     __tablename__ = "claims"
 
-    id = Column(String(64), primary_key=True, default=generate_uuid)
+    id = Column(String(64), primary_key=True)  # E.g. CLM-001
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    type = Column(
+    claim_type = Column(
         String(32),
         CheckConstraint(
-            "type IN ('state', 'decision', 'task', 'blocker', 'dependency', 'ownership', 'contradiction', 'open_loop', 'gap')",
+            "claim_type IN ('task_status', 'decision', 'ownership', 'blocker', 'dependency', 'contribution', 'doc_gap')",
             name="check_claim_type",
         ),
         nullable=False,
     )
-    statement = Column(Text, nullable=False)
-    status = Column(
+    text = Column(Text, nullable=False)
+    module = Column(String(64), nullable=False)
+    owner_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    verification_status = Column(
         String(32),
-        CheckConstraint("status IN ('verified', 'inferred', 'conflicting', 'missing')", name="check_claim_status"),
+        CheckConstraint(
+            "verification_status IN ('verified', 'inferred', 'conflicting', 'missing')",
+            name="check_claim_verification_status",
+        ),
+        nullable=False,
+    )
+    review_status = Column(
+        String(32),
+        CheckConstraint(
+            "review_status IN ('unreviewed', 'approved', 'edited', 'rejected')",
+            name="check_claim_review_status",
+        ),
+        nullable=False,
+        default="unreviewed",
+    )
+    confidence = Column(Float, nullable=True)
+    clearance_level = Column(
+        String(32),
+        CheckConstraint("clearance_level IN ('public', 'team', 'restricted')", name="check_claim_clearance"),
         nullable=False,
         index=True,
-    )
-    confidence_note = Column(Text, nullable=True)
-    owner = Column(String(128), nullable=True)
-    access_label = Column(
-        String(32),
-        CheckConstraint("access_label IN ('public', 'internal', 'restricted')", name="check_claim_access_label"),
-        nullable=False,
-        index=True,
-    )
-    review_state = Column(
-        String(32),
-        CheckConstraint("review_state IN ('pending', 'accepted', 'edited', 'rejected')", name="check_claim_review_state"),
-        nullable=False,
-        default="pending",
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     project = relationship("Project", back_populates="claims")
-    evidence = relationship("ClaimEvidence", back_populates="claim", cascade="all, delete-orphan")
-    gap_questions = relationship("GapQuestion", back_populates="claim", cascade="all, delete-orphan")
-    reviews = relationship("Review", back_populates="claim", cascade="all, delete-orphan")
-    plan_steps = relationship("PlanStep", secondary="plan_step_claims", back_populates="claims")
+    owner = relationship("User")
+    evidences = relationship("ClaimEvidence", back_populates="claim", cascade="all, delete-orphan")
+    contradictions = relationship("Contradiction", secondary="contradiction_claims", back_populates="claims")
+    review_events = relationship("ReviewEvent", back_populates="claim", cascade="all, delete-orphan")
 
 
 class ClaimEvidence(Base):
@@ -153,49 +197,84 @@ class ClaimEvidence(Base):
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
     claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False, index=True)
-    activity_item_id = Column(String(64), ForeignKey("activity_items.id", ondelete="SET NULL"), nullable=True, index=True)
     source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
-    quote = Column(
-        String(200),
-        CheckConstraint("length(quote) <= 200", name="check_quote_max_length"),
-        nullable=False,
-    )
-    locator = Column(String(255), nullable=False)
+    chunk_id = Column(String(64), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True, index=True)
+    excerpt = Column(Text, nullable=False)
+    author = Column(String(128), nullable=True)
+    timestamp = Column(DateTime(timezone=True), nullable=True)
 
-    claim = relationship("Claim", back_populates="evidence")
-    activity_item = relationship("ActivityItem", back_populates="evidences")
+    claim = relationship("Claim", back_populates="evidences")
     source = relationship("Source", back_populates="evidences")
+    chunk = relationship("Chunk", back_populates="evidences")
 
 
-class GapQuestion(Base):
-    __tablename__ = "gap_questions"
-
-    id = Column(String(64), primary_key=True, default=generate_uuid)
-    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False, index=True)
-    question = Column(Text, nullable=False)
-    answer = Column(Text, nullable=True)
-    answered_by = Column(String(128), nullable=True)
-    answered_at = Column(DateTime(timezone=True), nullable=True)
-
-    claim = relationship("Claim", back_populates="gap_questions")
-
-
-class Review(Base):
-    __tablename__ = "reviews"
+class Contradiction(Base):
+    __tablename__ = "contradictions"
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
-    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False, index=True)
-    action = Column(
-        String(32),
-        CheckConstraint("action IN ('accept', 'edit', 'reject')", name="check_review_action"),
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_code = Column(String(64), nullable=False)
+    severity = Column(
+        String(16),
+        CheckConstraint("severity IN ('low', 'medium', 'high')", name="check_contradiction_severity"),
         nullable=False,
     )
-    edited_statement = Column(Text, nullable=True)
-    reviewer = Column(String(128), nullable=False)
-    version = Column(Integer, nullable=False, default=1)
+    reason = Column(Text, nullable=False)
+    suggested_action = Column(Text, nullable=False)
+    status = Column(
+        String(16),
+        CheckConstraint("status IN ('open', 'resolved')", name="check_contradiction_status"),
+        nullable=False,
+        default="open",
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    claim = relationship("Claim", back_populates="reviews")
+    project = relationship("Project", back_populates="contradictions")
+    claims = relationship("Claim", secondary="contradiction_claims", back_populates="contradictions")
+
+
+class ContradictionClaim(Base):
+    __tablename__ = "contradiction_claims"
+
+    contradiction_id = Column(String(64), ForeignKey("contradictions.id", ondelete="CASCADE"), primary_key=True, index=True)
+    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class InterviewQuestion(Base):
+    __tablename__ = "interview_questions"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="SET NULL"), nullable=True, index=True)
+    module = Column(String(64), nullable=False)
+    target_person_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=True)
+    answered_at = Column(DateTime(timezone=True), nullable=True)
+
+    project = relationship("Project")
+    claim = relationship("Claim")
+    target_person = relationship("User")
+
+
+class ReviewEvent(Base):
+    __tablename__ = "review_events"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False, index=True)
+    reviewer_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action = Column(
+        String(16),
+        CheckConstraint("action IN ('approve', 'edit', 'reject', 'flag')", name="check_review_action"),
+        nullable=False,
+    )
+    old_text = Column(Text, nullable=True)
+    new_text = Column(Text, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+
+    claim = relationship("Claim", back_populates="review_events")
+    reviewer = relationship("User")
 
 
 class Handover(Base):
@@ -203,38 +282,51 @@ class Handover(Base):
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    version = Column(Integer, nullable=False, default=1)
+    departing_user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    incoming_user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_start = Column(DateTime(timezone=True), nullable=True)
+    period_end = Column(DateTime(timezone=True), nullable=True)
     status = Column(
         String(32),
-        CheckConstraint("status IN ('draft', 'approved')", name="check_handover_status"),
+        CheckConstraint(
+            "status IN ('draft', 'in_review', 'approved', 'shared', 'acknowledged')",
+            name="check_handover_status",
+        ),
         nullable=False,
         default="draft",
     )
-    approved_by = Column(String(128), nullable=True)
+    approved_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
-    acknowledged_by = Column(String(128), nullable=True)
-    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     project = relationship("Project", back_populates="handovers")
-    plan_steps = relationship("PlanStep", back_populates="handover", cascade="all, delete-orphan", order_by="PlanStep.rank")
+    departing_user = relationship("User", foreign_keys=[departing_user_id])
+    incoming_user = relationship("User", foreign_keys=[incoming_user_id])
+    sections = relationship("HandoverSection", back_populates="handover", cascade="all, delete-orphan")
+    onboarding_progress = relationship("OnboardingProgress", back_populates="handover", cascade="all, delete-orphan")
 
 
-class PlanStepClaim(Base):
-    __tablename__ = "plan_step_claims"
-
-    plan_step_id = Column(String(64), ForeignKey("plan_steps.id", ondelete="CASCADE"), primary_key=True, index=True)
-    claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), primary_key=True, index=True)
-
-
-class PlanStep(Base):
-    __tablename__ = "plan_steps"
+class HandoverSection(Base):
+    __tablename__ = "handover_sections"
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
     handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
-    rank = Column(Integer, nullable=False)
-    action = Column(Text, nullable=False)
-    reason = Column(Text, nullable=False)
+    section_key = Column(String(64), nullable=False)
+    content_json = Column(Text, nullable=False)
+    review_status = Column(String(32), nullable=False, default="unreviewed")
 
-    handover = relationship("Handover", back_populates="plan_steps")
-    claims = relationship("Claim", secondary="plan_step_claims", back_populates="plan_steps")
+    handover = relationship("Handover", back_populates="sections")
+
+
+class OnboardingProgress(Base):
+    __tablename__ = "onboarding_progress"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    section_key = Column(String(64), nullable=False)
+    understood = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    handover = relationship("Handover", back_populates="onboarding_progress")
+    user = relationship("User")

@@ -1,0 +1,317 @@
+[
+  {
+    "id": "msg-01",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-02T09:00:00Z",
+    "text": "Welcome everyone to the Atlas Workspace project kick-off! Let's build a resilient platform."
+  },
+  {
+    "id": "msg-02",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-02T10:15:00Z",
+    "text": "Starting FastAPI setup. Using SQLite with SQLAlchemy 2.x for lightweight embedded persistence."
+  },
+  {
+    "id": "msg-03",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-03T11:20:00Z",
+    "text": "Initializing the React + Vite frontend shell. Defining token variables for consistent spacing and palette."
+  },
+  {
+    "id": "msg-04",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-04T12:00:00Z",
+    "text": "Base models for Users, Workspaces, and Memberships are pushed to the database module."
+  },
+  {
+    "id": "msg-05",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-05T09:30:00Z",
+    "text": "Please make sure all source files and code artifacts are checked into version control regularly."
+  },
+  {
+    "id": "msg-06",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-06T14:40:00Z",
+    "text": "Sidebar navigation component is structured. The Handover Center is featured prominently as the hero page."
+  },
+  {
+    "id": "msg-07",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-07T10:10:00Z",
+    "text": "Password hashing utility using passlib and bcrypt is ready in the auth module."
+  },
+  {
+    "id": "msg-08",
+    "channel": "#dev-backend",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-08T11:00:00Z",
+    "text": "Sprint planning notes are posted. Rahul, make sure JWT authentication is well-instrumented."
+  },
+  {
+    "id": "msg-09",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-10T16:30:00Z",
+    "text": "Committed JWT authentication middleware draft in commit c5e055e."
+  },
+  {
+    "id": "msg-10",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-12T13:45:00Z",
+    "text": "Design tokens updated in tokens.css. Clean enterprise slate aesthetic, one accent color."
+  },
+  {
+    "id": "msg-11",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-13T15:20:00Z",
+    "text": "Repository patterns established for clean database queries."
+  },
+  {
+    "id": "msg-12",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-15T12:00:00Z",
+    "text": "Drafted initial API endpoints specification for OpenAPI docs."
+  },
+  {
+    "id": "msg-13",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-16T14:10:00Z",
+    "text": "Heads up: I switched from in-memory cache to Redis for session tokens and event counters to handle multi-worker scaling."
+  },
+  {
+    "id": "msg-14",
+    "channel": "#dev-backend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-16T14:25:00Z",
+    "text": "Got it. Is the Redis connection URL configurable via .env?"
+  },
+  {
+    "id": "msg-15",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-16T14:30:00Z",
+    "text": "Yes, defaults to redis://localhost:6379/0 if not provided in the environment."
+  },
+  {
+    "id": "msg-16",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-17T17:45:00Z",
+    "text": "Added StatusBadge and StatCard components with loading states."
+  },
+  {
+    "id": "msg-17",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-18T10:00:00Z",
+    "text": "Mid-sprint sync complete. Reminder: Ankit is taking over the payments integration stream."
+  },
+  {
+    "id": "msg-18",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-19T11:00:00Z",
+    "text": "Email notification dispatcher stub is in place."
+  },
+  {
+    "id": "msg-19",
+    "channel": "#dev-backend",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-20T09:15:00Z",
+    "text": "Rahul, please update tasks.csv to reflect the latest module ownership assignments."
+  },
+  {
+    "id": "msg-20",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-21T15:10:00Z",
+    "text": "Fetch wrapper in api/client.js reading VITE_API_URL is operational."
+  },
+  {
+    "id": "msg-21",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-23T09:40:00Z",
+    "text": "Added index on project workspace_id column for fast lookup queries."
+  },
+  {
+    "id": "msg-22",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-24T17:00:00Z",
+    "text": "Working on notification stream handler."
+  },
+  {
+    "id": "msg-23",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-25T11:00:00Z",
+    "text": "Welcoming Priya Nair who will be joining the team next week to take over backend systems!"
+  },
+  {
+    "id": "msg-24",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-25T14:30:00Z",
+    "text": "Welcome Priya! Looking forward to passing over the reins smoothly."
+  },
+  {
+    "id": "msg-25",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-26T11:30:00Z",
+    "text": "Welcome Priya! Let me know if you need any frontend routes or payload shapes."
+  },
+  {
+    "id": "msg-26",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-27T15:45:00Z",
+    "text": "Added unit tests for JWT token expiry."
+  },
+  {
+    "id": "msg-27",
+    "channel": "#dev-backend",
+    "author": "Meera Shah",
+    "timestamp": "2026-10-28T16:00:00Z",
+    "text": "Reminder that auth security review is still pending, so let's keep auth task status as in-progress."
+  },
+  {
+    "id": "msg-28",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-29T10:30:00Z",
+    "text": "EmptyState component now displays honest phase indicators for unbuilt tabs."
+  },
+  {
+    "id": "msg-29",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-10-30T14:50:00Z",
+    "text": "Database pool ping logic tested on SQLite."
+  },
+  {
+    "id": "msg-30",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-10-31T16:20:00Z",
+    "text": "Demo role switcher allows toggling Admin, Incoming, and Departing headers in real time."
+  },
+  {
+    "id": "msg-31",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-11-01T09:00:00Z",
+    "text": "Starting November sprint. Handover preparations for Rahul and Priya are top priority."
+  },
+  {
+    "id": "msg-32",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-02T09:30:00Z",
+    "text": "Hi team! Excited to join. Setting up my development environment and cloning the Atlas workspace."
+  },
+  {
+    "id": "msg-33",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-11-02T10:00:00Z",
+    "text": "Welcome Priya! The meeting notes from today's sync outline the transition roadmap."
+  },
+  {
+    "id": "msg-34",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-03T11:30:00Z",
+    "text": "Successfully initialized local SQLite database. All models compiled cleanly."
+  },
+  {
+    "id": "msg-35",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-04T14:45:00Z",
+    "text": "Submitted a patch handling null project start_date in repository queries."
+  },
+  {
+    "id": "msg-36",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-11-05T10:30:00Z",
+    "text": "Tokens verified across both light and dark enterprise tones."
+  },
+  {
+    "id": "msg-37",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-11-05T17:00:00Z",
+    "text": "Email notification templates updated with standard headers."
+  },
+  {
+    "id": "msg-38",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-06T10:15:00Z",
+    "text": "Added tests for workspace membership cascades."
+  },
+  {
+    "id": "msg-39",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-11-06T15:30:00Z",
+    "text": "Sources table on Overview now shows real synthetic labels and clearance tags."
+  },
+  {
+    "id": "msg-40",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-11-07T12:00:00Z",
+    "text": "Reviewing final transition docs. Priya, let me know if any architecture flows need clarification."
+  },
+  {
+    "id": "msg-41",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-08T14:00:00Z",
+    "text": "Added curl verification commands into docs/architecture.md."
+  },
+  {
+    "id": "msg-42",
+    "channel": "#dev-frontend",
+    "author": "Ankit Rao",
+    "timestamp": "2026-11-09T10:45:00Z",
+    "text": "Verified role switching correctly filters restricted sources on incoming view."
+  },
+  {
+    "id": "msg-43",
+    "channel": "#dev-backend",
+    "author": "Priya Nair",
+    "timestamp": "2026-11-09T16:30:00Z",
+    "text": "Confirmed auto-seed behavior works on first startup when database is empty."
+  },
+  {
+    "id": "msg-44",
+    "channel": "#dev-backend",
+    "author": "Rahul Verma",
+    "timestamp": "2026-11-10T11:30:00Z",
+    "text": "All handover audit items ready. Handover Center is prepped for review."
+  },
+  {
+    "id": "msg-45",
+    "channel": "#general",
+    "author": "Meera Shah",
+    "timestamp": "2026-11-10T17:00:00Z",
+    "text": "Great transition work team. Ready for final Phase 1 verification!"
+  }
+]

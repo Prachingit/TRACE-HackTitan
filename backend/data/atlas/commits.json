@@ -1,0 +1,212 @@
+[
+  {
+    "sha": "c1a011a",
+    "author": "Rahul Verma",
+    "date": "2026-10-02T10:00:00Z",
+    "message": "chore: initial FastAPI repository scaffolding and database configuration",
+    "files": ["backend/app/main.py", "backend/app/db.py", "backend/app/config.py"]
+  },
+  {
+    "sha": "c2b022b",
+    "author": "Rahul Verma",
+    "date": "2026-10-04T11:30:00Z",
+    "message": "feat(database): user and workspace relational models",
+    "files": ["backend/app/models/user.py", "backend/app/models/workspace.py"]
+  },
+  {
+    "sha": "c3c033c",
+    "author": "Ankit Rao",
+    "date": "2026-10-05T14:15:00Z",
+    "message": "feat(frontend): setup Vite React dashboard shell and design tokens",
+    "files": ["frontend/src/App.jsx", "frontend/src/styles/tokens.css", "frontend/package.json"]
+  },
+  {
+    "sha": "c4d044d",
+    "author": "Rahul Verma",
+    "date": "2026-10-07T09:45:00Z",
+    "message": "feat(auth): password hashing with passlib and bcrypt",
+    "files": ["backend/app/services/auth.py", "backend/app/utils/security.py"]
+  },
+  {
+    "sha": "c5e055e",
+    "author": "Rahul Verma",
+    "date": "2026-10-10T16:20:00Z",
+    "message": "feat(auth): Added JWT authentication middleware",
+    "files": ["backend/app/middleware/auth.py", "backend/app/schemas/auth.py"]
+  },
+  {
+    "sha": "c6f066f",
+    "author": "Ankit Rao",
+    "date": "2026-10-12T13:10:00Z",
+    "message": "feat(frontend-dashboard): sidebar navigation and responsive layout",
+    "files": ["frontend/src/components/Sidebar.jsx", "frontend/src/components/Layout.jsx"]
+  },
+  {
+    "sha": "c7a077a",
+    "author": "Rahul Verma",
+    "date": "2026-10-13T15:00:00Z",
+    "message": "feat(database): base repository pattern for transactional operations",
+    "files": ["backend/app/db/repository.py"]
+  },
+  {
+    "sha": "c8b088b",
+    "author": "Rahul Verma",
+    "date": "2026-10-15T11:25:00Z",
+    "message": "feat(api-docs): OpenAPI tags and metadata customization",
+    "files": ["backend/app/main.py", "docs/api_notes.md"]
+  },
+  {
+    "sha": "c9c099c",
+    "author": "Ankit Rao",
+    "date": "2026-10-17T17:30:00Z",
+    "message": "feat(frontend-dashboard): status badges and stat card metrics",
+    "files": ["frontend/src/components/StatusBadge.jsx", "frontend/src/components/StatCard.jsx"]
+  },
+  {
+    "sha": "d1d011d",
+    "author": "Rahul Verma",
+    "date": "2026-10-19T10:40:00Z",
+    "message": "feat(notifications): email notification dispatcher using SMTP backend",
+    "files": ["backend/app/services/notifications/email.py"]
+  },
+  {
+    "sha": "d2e022e",
+    "author": "Ankit Rao",
+    "date": "2026-10-21T14:50:00Z",
+    "message": "feat(frontend-dashboard): API client fetch wrapper with error handling",
+    "files": ["frontend/src/api/client.js"]
+  },
+  {
+    "sha": "d3f033f",
+    "author": "Rahul Verma",
+    "date": "2026-10-23T09:15:00Z",
+    "message": "refactor(database): add index on project workspace lookup",
+    "files": ["backend/app/models/project.py"]
+  },
+  {
+    "sha": "d4a044a",
+    "author": "Rahul Verma",
+    "date": "2026-10-24T16:45:00Z",
+    "message": "feat(notifications): in-app alert streaming stub",
+    "files": ["backend/app/services/notifications/stream.py"]
+  },
+  {
+    "sha": "d5b055b",
+    "author": "Ankit Rao",
+    "date": "2026-10-26T11:00:00Z",
+    "message": "chore(frontend): update route definitions and loading spinner",
+    "files": ["frontend/src/App.jsx", "frontend/src/components/Loading.jsx"]
+  },
+  {
+    "sha": "d6c066c",
+    "author": "Rahul Verma",
+    "date": "2026-10-27T15:20:00Z",
+    "message": "test(auth): unit tests for token expiration and signature validation",
+    "files": ["backend/tests/test_auth.py"]
+  },
+  {
+    "sha": "d7d077d",
+    "author": "Ankit Rao",
+    "date": "2026-10-29T10:10:00Z",
+    "message": "feat(frontend-dashboard): empty state visual component",
+    "files": ["frontend/src/components/EmptyState.jsx"]
+  },
+  {
+    "sha": "d8e088e",
+    "author": "Rahul Verma",
+    "date": "2026-10-30T14:30:00Z",
+    "message": "perf(database): connection pool sizing and health ping",
+    "files": ["backend/app/db.py"]
+  },
+  {
+    "sha": "d9f099f",
+    "author": "Ankit Rao",
+    "date": "2026-10-31T16:00:00Z",
+    "message": "feat(frontend-dashboard): role switcher control in top header",
+    "files": ["frontend/src/components/Layout.jsx"]
+  },
+  {
+    "sha": "e1a011a",
+    "author": "Rahul Verma",
+    "date": "2026-11-01T09:30:00Z",
+    "message": "docs(api-docs): document public endpoints and error schema",
+    "files": ["docs/api_notes.md"]
+  },
+  {
+    "sha": "e2b022b",
+    "author": "Priya Nair",
+    "date": "2026-11-03T11:00:00Z",
+    "message": "chore: environment setup and initial local tests run",
+    "files": ["README.md"]
+  },
+  {
+    "sha": "e3c033c",
+    "author": "Priya Nair",
+    "date": "2026-11-04T14:20:00Z",
+    "message": "fix(database): handle null start_date gracefully in project queries",
+    "files": ["backend/app/db/repository.py"]
+  },
+  {
+    "sha": "e4d044d",
+    "author": "Ankit Rao",
+    "date": "2026-11-05T10:15:00Z",
+    "message": "refactor(frontend): streamline typography using CSS token variables",
+    "files": ["frontend/src/styles/tokens.css"]
+  },
+  {
+    "sha": "e5e055e",
+    "author": "Rahul Verma",
+    "date": "2026-11-05T16:40:00Z",
+    "message": "refactor(notifications): format email template with branding header",
+    "files": ["backend/app/services/notifications/templates.py"]
+  },
+  {
+    "sha": "e6f066f",
+    "author": "Priya Nair",
+    "date": "2026-11-06T09:50:00Z",
+    "message": "test(database): verify workspace membership cascading deletes",
+    "files": ["backend/tests/test_workspace.py"]
+  },
+  {
+    "sha": "e7a077a",
+    "author": "Ankit Rao",
+    "date": "2026-11-06T15:10:00Z",
+    "message": "feat(frontend-dashboard): source list table with clearance badge indicators",
+    "files": ["frontend/src/pages/Overview.jsx"]
+  },
+  {
+    "sha": "e8b088b",
+    "author": "Rahul Verma",
+    "date": "2026-11-07T11:30:00Z",
+    "message": "chore: handover notes preparation and code comments cleanup",
+    "files": ["backend/app/services/auth.py"]
+  },
+  {
+    "sha": "e9c099c",
+    "author": "Priya Nair",
+    "date": "2026-11-08T13:45:00Z",
+    "message": "refactor(api-docs): add curl examples to architecture documentation",
+    "files": ["docs/architecture.md"]
+  },
+  {
+    "sha": "f1d011d",
+    "author": "Ankit Rao",
+    "date": "2026-11-09T10:20:00Z",
+    "message": "fix(frontend): handle empty source list gracefully on initial load",
+    "files": ["frontend/src/pages/Overview.jsx"]
+  },
+  {
+    "sha": "f2e022e",
+    "author": "Priya Nair",
+    "date": "2026-11-09T16:00:00Z",
+    "message": "docs: document demo seed behavior for ephemeral environments",
+    "files": ["README.md"]
+  },
+  {
+    "sha": "f3f033f",
+    "author": "Rahul Verma",
+    "date": "2026-11-10T11:00:00Z",
+    "message": "chore: final backend handover audit checklist verification",
+    "files": ["docs/architecture.md"]
+  }
+]

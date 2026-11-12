@@ -1,0 +1,19 @@
+id,title,assignee,status,module,updated,depends_on
+TSK-001,FastAPI backend foundation,Rahul Verma,Done,database,2026-10-03,
+TSK-002,JWT authentication middleware,Rahul Verma,In Progress,auth,2026-10-18,TSK-001
+TSK-003,User password hashing and security,Rahul Verma,Done,auth,2026-10-07,TSK-001
+TSK-004,Email notification service,Rahul Verma,Done,notifications,2026-10-20,TSK-001
+TSK-005,Notifications webhook retry,Rahul Verma,In Progress,notifications,2026-09-28,TSK-004
+TSK-006,Frontend layout and design tokens,Ankit Rao,Done,frontend-dashboard,2026-10-12,
+TSK-007,Payment module setup,Rahul Verma,In Progress,payments,2026-10-20,TSK-001
+TSK-008,Payment gateway integration,Rahul Verma,Done,payments,2026-10-25,TSK-007
+TSK-009,Payment testing,Rahul Verma,To Do,payments,2026-10-26,TSK-008
+TSK-010,Database backup,None,To Do,database,2026-10-15,
+TSK-011,OpenAPI docs annotations,Rahul Verma,Done,api-docs,2026-10-16,
+TSK-012,Overview metrics and stat cards,Ankit Rao,Done,frontend-dashboard,2026-10-28,TSK-006
+TSK-013,Role switcher component,Ankit Rao,Done,frontend-dashboard,2026-10-31,TSK-006
+TSK-014,Database connection pooling audit,Rahul Verma,Done,database,2026-10-30,TSK-001
+TSK-015,Onboarding documentation review,Priya Nair,In Progress,api-docs,2026-11-04,TSK-011
+TSK-016,Workspace membership test suite,Priya Nair,Done,database,2026-11-06,TSK-001
+TSK-017,Sources table clearance badge UI,Ankit Rao,Done,frontend-dashboard,2026-11-07,TSK-012
+TSK-018,Handover audit and sign-off prep,Rahul Verma,In Progress,api-docs,2026-11-09,TSK-015
