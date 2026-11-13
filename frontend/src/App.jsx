@@ -12,6 +12,8 @@ import { ExitInterviewPage } from './pages/Interview';
 import { ReviewWorkbenchPage } from './pages/Review';
 import { IntegrationsPage, TeamPage } from './pages/Team';
 import { Overview } from './pages/Overview';
+import { HandoverCenterPage, HandoverReportsPage } from './pages/Handovers';
+import { IncomingPortalPage } from './pages/IncomingPortal';
 
 export function App() {
   return (
@@ -26,6 +28,9 @@ export function App() {
             <Route path="/invite/:token" element={<InviteAccept />} />
             <Route element={<Layout />}>
               <Route index element={<Overview />} />
+              <Route path="portal" element={<IncomingPortalPage />} />
+              <Route path="handovers" element={<HandoverCenterPage />} />
+              <Route path="handover-reports" element={<HandoverReportsPage />} />
               <Route path="projects" element={<ProjectList />} />
               <Route path="projects/new" element={<CreateProject />} />
               <Route path="projects/:id" element={<ProjectSources />} />
@@ -37,6 +42,7 @@ export function App() {
               <Route path="projects/:id/contradictions" element={<ContradictionRadarPage />} />
               <Route path="projects/:id/interview" element={<ExitInterviewPage />} />
               <Route path="projects/:id/review" element={<ReviewWorkbenchPage />} />
+              <Route path="projects/:id/handovers" element={<HandoverCenterPage />} />
               <Route path="activity" element={<ActivityPage />} />
               <Route path="knowledge-base" element={<KnowledgeBasePage />} />
               <Route path="evidence" element={<EvidenceLedgerPage />} />

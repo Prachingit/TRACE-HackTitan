@@ -123,3 +123,12 @@ tr.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -
   .nav { display: flex; flex-wrap: wrap; gap: var(--s1); }
   .main { padding: var(--s4) var(--s3); }
 }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--s4); }
+.panel.error { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+p.error { color: var(--danger); font-size: 13px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+.stat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--s3); }
+.stat-num { font-size: 20px; font-weight: 600; margin-top: 2px; font-family: var(--font-mono); }
+.input { font: inherit; padding: 6px var(--s2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); max-width: 100%; }
+.label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }

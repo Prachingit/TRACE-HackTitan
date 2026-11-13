@@ -121,6 +121,35 @@ export const api = {
   claimHistory: (cid) => request(`/api/claims/${cid}/history`),
   bulkReview: (pid, claim_ids, note) =>
     request(`/api/projects/${pid}/review/bulk`, { method: 'POST', json: { claim_ids, action: 'accept', note } }),
+
+  // Phase 7: Clearance, Handover Center, Incoming Portal & Secondary Assistant
+  setClaimClearance: (cid, clearance_level, reason) =>
+    request(`/api/claims/${cid}/clearance`, { method: 'POST', json: { clearance_level, reason } }),
+  generateHandover: (pid, d = {}) =>
+    request(`/api/projects/${pid}/handovers`, { method: 'POST', json: d }),
+  projectHandovers: (pid, filters = {}) =>
+    request(`/api/projects/${pid}/handovers${qs(filters)}`),
+  handovers: (filters = {}) =>
+    request(`/api/handovers${qs(filters)}`),
+  handoverDetail: (hid, filters = {}) =>
+    request(`/api/handovers/${hid}${qs(filters)}`),
+  patchHandoverSection: (hid, sectionKey, d) =>
+    request(`/api/handovers/${hid}/sections/${sectionKey}`, { method: 'PATCH', json: d }),
+  approveHandover: (hid) =>
+    request(`/api/handovers/${hid}/approve`, { method: 'POST' }),
+  shareHandover: (hid, target_user_id) =>
+    request(`/api/handovers/${hid}/share`, { method: 'POST', json: { target_user_id } }),
+  revokeHandover: (hid) =>
+    request(`/api/handovers/${hid}/revoke`, { method: 'POST' }),
+  acknowledgeHandover: (hid) =>
+    request(`/api/handovers/${hid}/acknowledge`, { method: 'POST' }),
+  handoverPdfUrl: (hid, filters = {}) => `/api/handovers/${hid}/export.pdf${qs(filters)}`,
+  handoverHistory: (hid) => request(`/api/handovers/${hid}/history`),
+  getOnboarding: (hid) => request(`/api/handovers/${hid}/onboarding`),
+  updateOnboarding: (hid, item_key, completed, note = null) =>
+    request(`/api/handovers/${hid}/onboarding`, { method: 'POST', json: { item_key, completed, note } }),
+  askProject: (pid, question, filters = {}) =>
+    request(`/api/projects/${pid}/ask${qs(filters)}`, { method: 'POST', json: { question } }),
 };
 
 export default api;

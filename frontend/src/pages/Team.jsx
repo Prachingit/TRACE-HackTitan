@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import api from '../api/client';
 import { EmptyState, Loading } from '../components/ui';
@@ -39,7 +40,15 @@ export function TeamPage() {
                   {ROLES.map((r) => <option key={r}>{r}</option>)}
                 </select>) : m.role}</td>
               <td>{isAdmin && m.user_id !== user.id && (
-                <button className="btn sm danger" onClick={() => window.confirm(`Revoke access for ${m.name}?`) && act(() => api.removeMember(workspace.id, m.user_id))}>Revoke access</button>)}</td>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {m.role === 'departing' ? (
+                    <Link className="btn sm primary" to="/handovers">Start handover</Link>
+                  ) : (
+                    <button className="btn sm" onClick={() => act(() => api.setRole(workspace.id, m.user_id, 'departing'))}>Mark departing</button>
+                  )}
+                  <button className="btn sm danger" onClick={() => window.confirm(`Revoke access for ${m.name}?`) && act(() => api.removeMember(workspace.id, m.user_id))}>Revoke access</button>
+                </div>
+              )}</td>
             </tr>))}
           </tbody>
         </table>

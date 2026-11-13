@@ -12,6 +12,9 @@ import {
   Activity,
   MessageSquareText,
   ClipboardCheck,
+  FileText,
+  FileSpreadsheet,
+  Compass,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -97,6 +100,7 @@ export function ProjectSubnav({ projectId }) {
       <NavLink to={`/projects/${projectId}/contradictions`}>Contradiction radar</NavLink>
       <NavLink to={`/projects/${projectId}/interview`}>Exit interview</NavLink>
       <NavLink to={`/projects/${projectId}/review`}>Review workbench</NavLink>
+      <NavLink to={`/projects/${projectId}/handovers`}>Handover center</NavLink>
     </nav>
   );
 }
@@ -114,22 +118,36 @@ export function ProtectedRoute() {
 
 export function Layout() {
   const { user, workspace, logout } = useAuth();
+  const isIncoming = workspace?.role === 'incoming';
+  const isDeparting = workspace?.role === 'departing';
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">TRACE</div>
-        <nav className="nav">
-          <NavLink to="/" end><LayoutDashboard size={16} strokeWidth={1.5} />Overview</NavLink>
-          <NavLink to="/projects"><FolderKanban size={16} strokeWidth={1.5} />Projects</NavLink>
-          <NavLink to="/activity"><Activity size={16} strokeWidth={1.5} />Activity</NavLink>
-          <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
-          <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>
-          <NavLink to="/contradictions"><AlertTriangle size={16} strokeWidth={1.5} />Contradictions</NavLink>
-          <NavLink to="/interview"><MessageSquareText size={16} strokeWidth={1.5} />Exit interview</NavLink>
-          <NavLink to="/review"><ClipboardCheck size={16} strokeWidth={1.5} />Review workbench</NavLink>
-          <NavLink to="/team"><Users size={16} strokeWidth={1.5} />Team</NavLink>
-          <NavLink to="/integrations"><Plug size={16} strokeWidth={1.5} />Integrations</NavLink>
-        </nav>
+        {isIncoming ? (
+          <nav className="nav">
+            <NavLink to="/portal" end><Compass size={16} strokeWidth={1.5} />Incoming portal</NavLink>
+          </nav>
+        ) : (
+          <nav className="nav">
+            <NavLink to="/" end><LayoutDashboard size={16} strokeWidth={1.5} />Overview</NavLink>
+            <NavLink to="/handovers"><FileText size={16} strokeWidth={1.5} />Handover center</NavLink>
+            <NavLink to="/handover-reports"><FileSpreadsheet size={16} strokeWidth={1.5} />Handover reports</NavLink>
+            <NavLink to="/projects"><FolderKanban size={16} strokeWidth={1.5} />Projects</NavLink>
+            <NavLink to="/activity"><Activity size={16} strokeWidth={1.5} />Activity</NavLink>
+            <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
+            <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>
+            <NavLink to="/contradictions"><AlertTriangle size={16} strokeWidth={1.5} />Contradictions</NavLink>
+            <NavLink to="/interview"><MessageSquareText size={16} strokeWidth={1.5} />Exit interview</NavLink>
+            {!isDeparting && (
+              <>
+                <NavLink to="/review"><ClipboardCheck size={16} strokeWidth={1.5} />Review workbench</NavLink>
+                <NavLink to="/team"><Users size={16} strokeWidth={1.5} />Team</NavLink>
+                <NavLink to="/integrations"><Plug size={16} strokeWidth={1.5} />Integrations</NavLink>
+              </>
+            )}
+          </nav>
+        )}
         <div className="sidebar-foot">
           <div>{user?.name}</div>
           <div className="muted">{workspace?.name} ({workspace?.role})</div>

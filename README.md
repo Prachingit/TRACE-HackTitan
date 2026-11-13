@@ -50,3 +50,9 @@ cd backend; python -m pytest -v
 - Scanned PDFs fail with a clear message; OCR is not supported.
 - SQLite and local file storage suit a single instance. Use a persistent disk when hosting.
 - Background parsing runs in-process; sources left `parsing` after a crash are reset to `queued` on startup.
+
+## Round 3 Roadmap (Planned)
+
+- **Readiness Verification**: Automated pre-handover checks and sign-off gates verifying evidence coverage, resolved contradictions, and owner assignments before a departure is finalized.
+- **Living Handover**: Continuous post-handover sync that surfaces newly merged commits, resolved issues, and updated decisions after a handover is shared.
+- **Continuity Graph**: Interactive cross-project knowledge and dependency graph linking people, modules, decisions, and handovers over time.

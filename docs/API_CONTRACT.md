@@ -95,3 +95,23 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 | POST | `/claims/{claim_id}/review` | `{action: accept\|edit\|reject\|flag, text?, note?, resolve_contradictions?}`. `accept`/`edit`/`reject` admin-only (403); `flag` admin or `team_member`. Appends a `ReviewEvent`. `accept` requires valid evidence and no open contradictions (409 otherwise unless `resolve_contradictions=true` with required note). |
 | GET | `/claims/{claim_id}/history` | Append-only `ReviewEvent` list with version numbers and word-level diffs for edits. No update/delete endpoint exists. |
 | POST | `/projects/{id}/review/bulk` | Admin only (403). `{claim_ids, action: "accept", note?}`. Accepts eligible claims and returns `accepted[]` and `skipped[]` with reasons. |
+
+## Phase 7: Clearance Engine, Handover Center, Incoming Portal & Assistant
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/claims/{id}/clearance` | Admin only (403). `{clearance_level, reason}`. Overrides a claim's clearance with a required recorded reason. |
+| POST | `/projects/{id}/handovers` | Admin only (403). Generates a 10-section handover draft from approved claims with explainable readiness score. |
+| GET | `/projects/{id}/handovers` | Clearance-filtered handovers for a project. Supports admin `?view_as=incoming\|departing`. |
+| GET | `/handovers` | Clearance-filtered handovers visible to the current user across workspaces. |
+| GET | `/handovers/{id}` | Handover detail + filtered sections (403 for unshared/other incoming or departing, 404 cross-workspace). |
+| PATCH | `/handovers/{id}/sections/{section_key}` | Admin only (403, blocked in `?view_as` preview). Review/edit section; `approved_with_gaps` requires `gap_note`. |
+| POST | `/handovers/{id}/approve` | Admin only (403). Approves handover once all sections are `approved` or `approved_with_gaps`. |
+| POST | `/handovers/{id}/share` | Admin only (403). `{target_user_id}`. Shares an approved handover with a workspace member. |
+| POST | `/handovers/{id}/revoke` | Admin only (403). Revokes active share. |
+| POST | `/handovers/{id}/acknowledge` | Targeted incoming user only (403 otherwise). Acknowledges receipt of a shared handover. |
+| GET | `/handovers/{id}/export.pdf` | Clearance-filtered server-side PDF export (`application/pdf`). |
+| GET | `/handovers/{id}/history` | Append-only `HandoverEvent` audit log (team lead / team member). |
+| GET | `/handovers/{id}/onboarding` | Checklist progress (`OnboardingProgress`) for the current user. |
+| POST | `/handovers/{id}/onboarding` | `{item_key, completed, note?}`. Toggles checklist progress. |
+| POST | `/projects/{id}/ask` | `{question}`. Secondary clearance-filtered, citation-verified project knowledge assistant. |

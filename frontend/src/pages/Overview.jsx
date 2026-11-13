@@ -1,25 +1,66 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import api from '../api/client';
-import { EmptyState, Loading, VerificationBadge } from '../components/ui';
+import { useAuth } from '../hooks/useAuth';
+import { AskKnowledgePanel } from '../components/AskKnowledgePanel';
+import { EmptyState, Loading, StatusBadge, VerificationBadge } from '../components/ui';
 
 export function Overview() {
+  const { workspace } = useAuth();
   const [rows, setRows] = useState(null);
+  const [handovers, setHandovers] = useState([]);
   const [err, setErr] = useState('');
 
   useEffect(() => {
+    if (workspace?.role === 'incoming') return;
     (async () => {
       try {
-        const projects = await api.projects();
+        const [projects, hList] = await Promise.all([
+          api.projects(),
+          api.handovers().catch(() => []),
+        ]);
+        setHandovers(hList);
         setRows(await Promise.all(projects.map(async (p) => ({ p, s: await api.summary(p.id) }))));
       } catch (x) { setErr(x.message); }
     })();
-  }, []);
+  }, [workspace?.role]);
+
+  if (workspace?.role === 'incoming') {
+    return <Navigate to="/portal" replace />;
+  }
+
+  const latestHandover = handovers[0] || null;
+  const firstProjectId = rows && rows.length > 0 ? rows[0].p.id : null;
 
   return (
     <>
-      <h1>Overview</h1>
-      <p className="muted">Live project ingestion, claim verification breakdown, and open contradictions derived strictly from the database.</p>
+      <div className="page-head">
+        <div>
+          <h1>Continuity Overview</h1>
+          <p className="muted">Handover readiness, human-verified project health, and open knowledge gaps.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link className="btn primary" to="/handovers">Open Handover Center</Link>
+          <Link className="btn" to="/handover-reports">Handover reports</Link>
+        </div>
+      </div>
+
+      {latestHandover && (
+        <div className="panel" style={{ borderLeft: '3px solid var(--accent)', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <div className="muted" style={{ fontSize: 12 }}>Latest handover</div>
+              <strong>{latestHandover.title}</strong>
+              <span className="muted"> · Readiness {Math.round(latestHandover.readiness_score || 0)}/100</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <StatusBadge status={latestHandover.status} />
+              <Link className="btn sm" to={`/projects/${latestHandover.project_id}/handovers`}>Review handover</Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {err && <div className="alert error">{err}</div>}
       {!rows ? <Loading /> : rows.length === 0 ? (
         <EmptyState title="No projects yet"><Link to="/projects">Go to projects</Link> to create one.</EmptyState>
@@ -109,6 +150,11 @@ export function Overview() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {firstProjectId && (
+        <div style={{ marginTop: 16 }}>
+          <AskKnowledgePanel projectId={firstProjectId} compact />
         </div>
       )}
     </>
