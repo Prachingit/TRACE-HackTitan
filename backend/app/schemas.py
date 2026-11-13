@@ -16,6 +16,7 @@ class HealthResponse(BaseSchema):
     status: str = "ok"
     version: str = "1.0.0"
     db: str = "ok"
+    storage: str = "ok"
 
 
 class DemoLoadResponse(BaseSchema):

@@ -14,10 +14,12 @@ import { IntegrationsPage, TeamPage } from './pages/Team';
 import { Overview } from './pages/Overview';
 import { HandoverCenterPage, HandoverReportsPage } from './pages/Handovers';
 import { IncomingPortalPage } from './pages/IncomingPortal';
+import { ErrorBoundary, NotFoundPage } from './components/ErrorBoundary';
 
 export function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -51,12 +53,13 @@ export function App() {
               <Route path="review" element={<ReviewWorkbenchPage />} />
               <Route path="team" element={<TeamPage />} />
               <Route path="integrations" element={<IntegrationsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

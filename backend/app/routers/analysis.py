@@ -315,7 +315,9 @@ def start_project_analysis(
     db: Session = Depends(get_db),
 ):
     """Start an analysis run on the project's parsed sources."""
-    project, _ = _get_scoped_project(project_id, current_user.id, db)
+    project, membership = _get_scoped_project(project_id, current_user.id, db)
+    if membership.role not in ("admin", "team_member"):
+        raise HTTPException(403, "Only admins and team members can run analysis.")
     run = create_run_record(db, project_id=project.id, user_id=current_user.id)
     background_tasks.add_task(run_analysis_background_job, run.id)
     db.refresh(run)

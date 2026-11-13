@@ -404,9 +404,9 @@ def generate_handover(
     open_q_items = [
         {
             "question_id": q.id,
-            "question_text": q.question_text,
+            "question_text": q.question,
             "module": q.module,
-            "target_person": q.target_person,
+            "target_person": q.target_label or "unassigned",
             "clearance_level": q.clearance_level,
         }
         for q in open_questions
