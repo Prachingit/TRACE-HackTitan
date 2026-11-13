@@ -158,3 +158,58 @@ def forgot_password(body: ForgotPasswordRequest):
     # SMTP is configured — in a production build, enqueue a reset token email here.
     # For now, acknowledge the request without revealing email existence.
     return {"message": "If an account with that email exists, a reset link has been sent."}
+
+
+class DemoLoginRequest(BaseModel):
+    role: str = "admin"
+
+
+@router.get("/demo")
+def get_demo_info():
+    """Return synthetic demo account credentials and 5-step judge guide."""
+    from app.services.demo import DEMO_ACCOUNTS
+
+    return {
+        "synthetic": True,
+        "workspace_name": "Atlas Workspace (SYNTHETIC DEMO)",
+        "accounts": [
+            {
+                "role": a["role"],
+                "label": a["label"],
+                "email": a["email"],
+                "password": a["password"],
+                "summary": a["summary"],
+            }
+            for a in DEMO_ACCOUNTS
+        ],
+        "steps": [
+            "1. Sign in as Team Lead (Alex) to inspect Continuity Overview, Handover Center, Evidence Ledger, and Contradiction Radar.",
+            "2. Open a claim in Evidence Ledger to verify exact source excerpts and test Admin-only 'Preview as: Incoming' clearance filtering.",
+            "3. Switch to Incoming Member (Priya) to see the gated Incoming Portal, 'Where should I start?' continuation plan, and zero restricted data.",
+            "4. Switch to Departing Member (Rahul) to see only Rahul's own contributions and Exit Interview items.",
+            "5. Or create your own real account via Sign up to upload any non-Atlas project files into a clean workspace.",
+        ],
+    }
+
+
+@router.post("/demo", response_model=UserResponse)
+def login_demo(
+    body: DemoLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """One-click login into an isolated, synthetic demo role."""
+    from app.services.demo import DEMO_ACCOUNTS, ensure_demo_seeded
+
+    target = next((a for a in DEMO_ACCOUNTS if a["role"] == body.role), None)
+    if target is None:
+        raise HTTPException(400, "Invalid demo role. Choose admin, incoming, or departing.")
+
+    ensure_demo_seeded(db)
+    user = db.query(User).filter(User.email == target["email"]).first()
+    if not user:
+        raise HTTPException(500, "Demo account unavailable.")
+
+    token = create_access_token(user.id)
+    _set_auth_cookie(response, token)
+    return UserResponse.model_validate(user)

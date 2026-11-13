@@ -1,57 +1,104 @@
-# TRACE
+# TRACE — Team Records, Activity & Context Engine
 
-**Team Records, Activity & Context Engine** (Team HackTitan). *When people leave, knowledge shouldn't.*
+**"When people leave, knowledge shouldn't."**
 
-TRACE ingests scattered project data and, in later phases, builds an evidence-linked handover. **Phase 2 (this state)** is live multi-source ingestion: real accounts, workspaces, invites, tenant isolation, and three ways to add data (file upload, GitHub import, manual entry). There is no LLM, claim extraction, contradiction detection or handover logic yet.
+TRACE turns scattered project records (CSVs, markdown docs, PDFs, DOCX, chat logs, GitHub commits/PRs/issues, and manual notes) into a **human-approved, evidence-backed, clearance-filtered handover** and a **ranked continuation plan** for incoming team members.
 
-## Run locally
+## How TRACE Works
 
-Requires Python 3.11+ and Node 20+.
+1. **Collect**: Upload project artifacts (PDF, DOCX, CSV, Markdown, chat JSON), import public GitHub repositories, or add manual context notes with explicit clearance levels (`public`, `team`, `restricted`).
+2. **Understand**: Deterministic rules (and optional schema-validated LLM extraction with exact-excerpt verification) build an **Evidence Ledger**, detect **Contradictions** (status without evidence, conflicting ownership/status, unresolved dependencies, stale tasks), and generate targeted **Exit Interview** questions.
+3. **Transfer**: Team leads review and approve claims in the **Review Workbench**, assemble a 10-section **Handover** with an explainable **Readiness Score**, share it with an **Incoming Member**, and export a clearance-filtered **PDF**.
 
-```powershell
-# Backend (terminal 1)
-cd backend
-pip install -r requirements.txt
-copy ..\.env.example .env        # optional; dev defaults work without it
-python -m uvicorn app.main:app --reload --port 8000
+## Architecture
 
-# Frontend (terminal 2) - Vite proxies /api to :8000
-cd frontend
-npm.cmd install
-npm.cmd run dev                  # http://localhost:5173
+```mermaid
+flowchart LR
+  U["Sources (PDF / DOCX / CSV / MD / JSON / GitHub)"] --> I["Ingestion & Chunking"]
+  I --> E["Reconstruction Engine (Rules + Verified LLM)"]
+  E --> L["Evidence Ledger & Citation Validator"]
+  L --> R["Contradiction Radar & Exit Interview"]
+  R --> W["Human Review Workbench (Append-Only History)"]
+  W --> H["Handover Center & Ranked Continuation Plan"]
+  H --> C["Clearance Engine (team_lead / incoming / departing)"]
+  C --> P["Incoming Member Portal & PDF Export"]
 ```
 
-Migrations run automatically at backend startup (`alembic upgrade head`). To create one after a model change: `cd backend; python -m alembic revision --autogenerate -m "message"`. Never delete the database to apply schema changes.
+## Tech Stack
 
-### Single origin (production style)
-```powershell
-cd frontend; npm.cmd run build; Copy-Item dist ..\backend\static -Recurse
-cd ..\backend; python -m uvicorn app.main:app --port 8000   # app and API at http://localhost:8000
-```
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy 2.0, Alembic, SQLite (or Postgres via `DATABASE_URL`), `pypdf`, `python-docx`, `fpdf2`, `slowapi`, `passlib[bcrypt]`, `python-jose`.
+- **Frontend**: React 18, Vite 6, React Router, Lucide Icons, custom editorial CSS tokens.
+- **Deployment**: Single-origin multi-stage `Dockerfile` (Vite build served by FastAPI) + `render.yaml` with persistent `/data` disk.
 
-### Docker
+## Local Setup
+
+### Backend
 ```bash
-docker build -t trace .
-docker run -p 8000:8000 -e SECRET_KEY=$(python -c "import secrets;print(secrets.token_urlsafe(48))") -v trace-data:/data trace
-```
-`ENV=production` refuses to start without a strong `SECRET_KEY`. The `/data` volume holds the SQLite file and uploads; without a volume they are lost on redeploy.
-
-## Test
-```powershell
-cd backend; python -m pytest -v
+cd backend
+python -m pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
 ```
 
-## Configuration (see `.env.example`)
-`SECRET_KEY` (required in production), `DATABASE_URL`, `DATA_DIR`, `GITHUB_TOKEN` (optional), `SMTP_*` (optional; password reset stays disabled without them), `ALLOWED_ORIGINS` (dev only).
+### Frontend (dev mode)
+```bash
+cd frontend
+npm ci
+npm run dev
+```
 
-## Notes
-- API reference: [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
-- Atlas sample data (`backend/data/atlas/`) is fictional and loads only when an admin clicks "Load sample project data" on a project.
-- Scanned PDFs fail with a clear message; OCR is not supported.
-- SQLite and local file storage suit a single instance. Use a persistent disk when hosting.
-- Background parsing runs in-process; sources left `parsing` after a crash are reset to `queued` on startup.
+### Run Tests
+```bash
+cd backend
+python -m pytest -q
+```
 
-## Round 3 Roadmap (Planned)
+### Production Build & Docker
+```bash
+# Build single-origin Docker image
+docker build -t trace-app .
+docker run -p 8000:8000 \
+  -e ENV=production \
+  -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+  -e ALLOWED_ORIGINS="http://localhost:8000" \
+  -v trace-data:/data \
+  trace-app
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `ENV` | Prod | `development` or `production` |
+| `SECRET_KEY` | Prod | 32+ char random secret for JWT signing (fails fast in production if missing/default) |
+| `DATABASE_URL` | No | Defaults to SQLite (`sqlite:///./trace.db` or `sqlite:////data/trace.db` in Docker) |
+| `DATA_DIR` | No | Local/volume directory for uploaded source files |
+| `PORT` | No | HTTP port (default `8000`) |
+| `ALLOWED_ORIGINS` | Prod | Comma-separated CORS origins |
+| `LLM_API_KEY` | No | Optional OpenAI-compatible API key; deterministic rules run automatically when unset or on failure |
+| `GITHUB_TOKEN` | No | Optional token to raise GitHub API rate limits |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No | Optional SMTP settings for password reset emails |
+
+## Demo Accounts (SYNTHETIC)
+
+On startup, TRACE idempotently seeds an isolated synthetic **Atlas Workspace** using the real ingestion, reconstruction, contradiction, interview, and handover engines:
+
+| Role | Email | Password | What You See |
+| --- | --- | --- | --- |
+| Team Lead / Admin | `alex.lead@demo.example.com` | `DemoTrace2026!` | Full workspace, restricted records, Review Workbench, Handover Center |
+| Incoming Member | `priya.incoming@demo.example.com` | `DemoTrace2026!` | Incoming Portal, ranked plan, approved handover; zero restricted data |
+| Departing Member | `rahul.departing@demo.example.com` | `DemoTrace2026!` | Own contributions and exit interview questions only |
+
+## Data Handling, Privacy & Known Limitations
+
+- **Clearance Filtering**: `public`, `team`, and `restricted` levels are enforced in the backend (`app/engine/clearance.py`) across sources, chunks, claims, evidence, handovers, PDF export, and the secondary assistant.
+- **No Fabricated Evidence**: Missing information is marked `missing` or `"Rationale not recorded."`. LLM outputs fail closed if cited excerpts or claim IDs do not match stored records.
+- **Known Limitations**:
+  - Scanned image PDFs fail with a clear error message; OCR is not supported.
+  - Private GitHub repositories and third-party OAuth integrations (Slack, Jira, Google Drive, Notion) are planned, not implemented.
+  - SQLite + local disk suits single-instance hosting with a persistent volume; horizontal scaling requires Postgres (`DATABASE_URL`) and shared object storage.
+
+## Round 3 Roadmap (Planned — Not Implemented)
 
 - **Readiness Verification**: Automated pre-handover checks and sign-off gates verifying evidence coverage, resolved contradictions, and owner assignments before a departure is finalized.
 - **Living Handover**: Continuous post-handover sync that surfaces newly merged commits, resolved issues, and updated decisions after a handover is shared.

@@ -115,3 +115,6 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 | GET | `/handovers/{id}/onboarding` | Checklist progress (`OnboardingProgress`) for the current user. |
 | POST | `/handovers/{id}/onboarding` | `{item_key, completed, note?}`. Toggles checklist progress. |
 | POST | `/projects/{id}/ask` | `{question}`. Secondary clearance-filtered, citation-verified project knowledge assistant. |
+| GET | `/auth/demo` | Returns synthetic demo account info and 5-step judge guide. |
+| POST | `/auth/demo` | `{role: "admin" \| "incoming" \| "departing"}`. Signs into the isolated synthetic demo workspace. |
+| GET | `/health` | Returns `status`, `version`, `db`, and `storage` health. |

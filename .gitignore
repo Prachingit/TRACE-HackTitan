@@ -33,11 +33,13 @@ venv.bak/
 .env.local
 backend/.env
 
-# Databases
+# Databases & Runtime Uploads
 *.db
 *.sqlite
 *.sqlite3
 backend/trace.db
+backend/data/uploads/
+uploads/
 
 # Testing & Coverage
 .pytest_cache/

@@ -56,6 +56,8 @@ export const api = {
   logout: () => request('/api/auth/logout', { method: 'POST' }),
   me: () => request('/api/auth/me'),
   forgot: (email) => request('/api/auth/forgot-password', { method: 'POST', json: { email } }),
+  demoInfo: () => request('/api/auth/demo'),
+  loginDemo: (role) => request('/api/auth/demo', { method: 'POST', json: { role } }),
 
   workspaces: () => request('/api/workspaces'),
   createWorkspace: (name) => request('/api/workspaces', { method: 'POST', json: { name } }),

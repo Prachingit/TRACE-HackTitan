@@ -33,12 +33,16 @@ async def lifespan(app: FastAPI):
     cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
     command.upgrade(cfg, "head")
 
-    # Reset any sources stuck in 'parsing' from a previous crash
+    # Reset any sources stuck in 'parsing' from a previous crash & seed synthetic demo workspace
     db = SessionLocal()
     try:
         count = reset_stuck_sources(db)
         if count:
             print(f"[TRACE Startup] Reset {count} stuck source(s) to 'queued'.")
+        from app.services.demo import ensure_demo_seeded
+        ensure_demo_seeded(db)
+    except Exception as exc:
+        print(f"[TRACE Startup] Demo seed skipped: {exc}")
     finally:
         db.close()
 

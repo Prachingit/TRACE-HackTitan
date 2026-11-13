@@ -254,6 +254,9 @@ def delete_project(
     project, membership = _get_scoped_project(project_id, current_user.id, db)
     if membership.role != "admin":
         raise HTTPException(403, "Only admins can delete projects.")
+    from app.services.demo import DEMO_PROJECT_ID
+    if project.id == DEMO_PROJECT_ID:
+        raise HTTPException(403, "The synthetic demo project cannot be deleted.")
     db.delete(project)
     db.commit()
 

@@ -394,9 +394,9 @@ def generate_handover(
     open_ctr_items = [
         {
             "contradiction_id": ctr.id,
-            "summary": ctr.summary,
+            "summary": ctr.reason,
             "severity": ctr.severity,
-            "module": ctr.module,
+            "module": (ctr.claims[0].module if ctr.claims else None),
             "clearance_level": ctr.clearance_level,
         }
         for ctr in open_ctrs

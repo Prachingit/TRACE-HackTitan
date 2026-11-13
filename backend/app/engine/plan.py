@@ -350,15 +350,16 @@ def build_ranked_plan(
             ev_all.extend(evidence_by_claim.get(lc.id, []))
         if not ev_all:
             continue
+        ctr_module = linked_claims[0].module if linked_claims else None
         plan_items.append(
             {
                 "id": f"plan-ctr-{ctr.id}",
                 "priority": priority_counter,
                 "bucket": 1 if ctr.severity == "high" else 5,
-                "title": f"Resolve contradiction: {ctr.summary[:90]}",
-                "description": ctr.summary,
+                "title": f"Resolve contradiction: {(ctr.reason or '')[:90]}",
+                "description": ctr.reason,
                 "why_it_matters": f"{ctr.severity.capitalize()} severity conflict requires verification before relying on this area.",
-                "module": ctr.module,
+                "module": ctr_module,
                 "owner": None,
                 "status": "open_conflict",
                 "dependencies": [],

@@ -244,3 +244,36 @@ def test_role_matrix_security_headers_and_error_handling(client: TestClient):
     assert c_inc.post(f"/api/projects/{pid}/analyze").status_code == 403
     assert c_inc.post(f"/api/projects/{pid}/handovers", json={}).status_code == 403
     assert c_inc.get(f"/api/projects/{pid}/review/queue").status_code == 403
+
+
+def test_demo_workspace_and_role_isolation():
+    c_anon = TestClient(app, raise_server_exceptions=False)
+    info = c_anon.get("/api/auth/demo")
+    assert info.status_code == 200
+    assert info.json()["synthetic"] is True
+    assert len(info.json()["accounts"]) == 3
+
+    # Admin demo login
+    c_adm = TestClient(app, raise_server_exceptions=False)
+    r_adm = c_adm.post("/api/auth/demo", json={"role": "admin"})
+    assert r_adm.status_code == 200
+    projs = c_adm.get("/api/projects").json()
+    demo_proj = next(p for p in projs if p["id"] == "demo-atlas-project")
+    assert demo_proj["is_synthetic"] is True
+
+    # Non-destructive: cannot delete demo project
+    assert c_adm.delete(f"/api/projects/{demo_proj['id']}").status_code == 403
+
+    # Incoming demo login: sees shared handover, zero restricted sources
+    c_inc = TestClient(app, raise_server_exceptions=False)
+    assert c_inc.post("/api/auth/demo", json={"role": "incoming"}).status_code == 200
+    inc_srcs = c_inc.get(f"/api/projects/{demo_proj['id']}/sources").json()
+    assert all(s["clearance_level"] != "restricted" for s in inc_srcs)
+    inc_hs = c_inc.get("/api/handovers").json()
+    assert len(inc_hs) >= 1
+    assert c_inc.get(f"/api/handovers/{inc_hs[0]['id']}").status_code == 200
+
+    # Departing demo login: cannot access full handovers
+    c_dep = TestClient(app, raise_server_exceptions=False)
+    assert c_dep.post("/api/auth/demo", json={"role": "departing"}).status_code == 200
+    assert c_dep.get("/api/handovers").json() == []

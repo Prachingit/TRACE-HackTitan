@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const login = async (email, password) => { await api.login({ email, password }); await refresh(); };
+  const loginDemo = async (role) => { await api.loginDemo(role); await refresh(); };
   const signup = async (d) => { await api.signup(d); await refresh(); };
   const logout = async () => { await api.logout(); setUser(null); setWorkspaces([]); };
 
@@ -31,7 +32,7 @@ export function AuthProvider({ children }) {
   const isAdmin = workspace?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, workspaces, workspace, isAdmin, loading, login, signup, logout, refresh }}>
+    <AuthContext.Provider value={{ user, workspaces, workspace, isAdmin, loading, login, loginDemo, signup, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
