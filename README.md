@@ -4,6 +4,19 @@
 
 TRACE turns scattered project records (CSVs, markdown docs, PDFs, DOCX, chat logs, GitHub commits/PRs/issues, and manual notes) into a **human-approved, evidence-backed, clearance-filtered handover** and a **ranked continuation plan** for incoming team members.
 
+## Live Demo
+
+- **Public URL**: https://trace-app-7qmx.onrender.com
+- **Repository**: https://github.com/Prachingit/TRACE-HackTitan
+
+On startup, TRACE idempotently seeds an isolated **synthetic** **Atlas Workspace** demo (`is_synthetic: true`) using the real ingestion, reconstruction, contradiction, interview, and handover engines, with one-click demo logins on the sign-in page:
+
+| Demo User | Role | Email | Password | What You See |
+| --- | --- | --- | --- | --- |
+| **Alex** | Team Lead (`admin`) | `alex.lead@demo.example.com` | `DemoTrace2026!` | Full workspace, restricted records, Review Workbench, Handover Center |
+| **Priya** | Incoming (`incoming`) | `priya.incoming@demo.example.com` | `DemoTrace2026!` | Incoming Portal, ranked plan, approved handover; zero restricted data |
+| **Rahul** | Departing (`departing`) | `rahul.departing@demo.example.com` | `DemoTrace2026!` | Own contributions and exit interview questions only |
+
 ## How TRACE Works
 
 1. **Collect**: Upload project artifacts (PDF, DOCX, CSV, Markdown, chat JSON), import public GitHub repositories, or add manual context notes with explicit clearance levels (`public`, `team`, `restricted`).
@@ -79,24 +92,17 @@ docker run -p 8000:8000 \
 | `GITHUB_TOKEN` | No | Optional token to raise GitHub API rate limits |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No | Optional SMTP settings for password reset emails |
 
-## Demo Accounts (SYNTHETIC)
-
-On startup, TRACE idempotently seeds an isolated synthetic **Atlas Workspace** using the real ingestion, reconstruction, contradiction, interview, and handover engines:
-
-| Role | Email | Password | What You See |
-| --- | --- | --- | --- |
-| Team Lead / Admin | `alex.lead@demo.example.com` | `DemoTrace2026!` | Full workspace, restricted records, Review Workbench, Handover Center |
-| Incoming Member | `priya.incoming@demo.example.com` | `DemoTrace2026!` | Incoming Portal, ranked plan, approved handover; zero restricted data |
-| Departing Member | `rahul.departing@demo.example.com` | `DemoTrace2026!` | Own contributions and exit interview questions only |
-
 ## Data Handling, Privacy & Known Limitations
 
 - **Clearance Filtering**: `public`, `team`, and `restricted` levels are enforced in the backend (`app/engine/clearance.py`) across sources, chunks, claims, evidence, handovers, PDF export, and the secondary assistant.
 - **No Fabricated Evidence**: Missing information is marked `missing` or `"Rationale not recorded."`. LLM outputs fail closed if cited excerpts or claim IDs do not match stored records.
 - **Known Limitations**:
+  - Hosted on Render's free tier: the first request after inactivity can take about 50 seconds while the instance wakes up.
+  - Database is a hosted PostgreSQL (Neon), so users, projects, claims, and reviews persist across restarts (this differs from the Round 1 plan, which named SQLite).
+  - Original uploaded files are stored on the free instance's ephemeral disk, so they can disappear after a restart. Extracted chunks, claims, and evidence stay in the database, and the app shows a clear message when an original file is gone.
+  - The three Round 3 items (**Readiness Verification**, **Living Handover**, **Continuity Graph**) are not implemented.
   - Scanned image PDFs fail with a clear error message; OCR is not supported.
   - Private GitHub repositories and third-party OAuth integrations (Slack, Jira, Google Drive, Notion) are planned, not implemented.
-  - SQLite + local disk suits single-instance hosting with a persistent volume; horizontal scaling requires Postgres (`DATABASE_URL`) and shared object storage.
 
 ## Round 3 Roadmap (Planned — Not Implemented)
 
