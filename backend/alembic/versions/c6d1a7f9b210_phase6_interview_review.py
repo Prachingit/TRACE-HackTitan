@@ -39,9 +39,10 @@ def upgrade() -> None:
         {"recreate": "always", "table_args": _claim_checks("'unreviewed', 'needs_review', 'approved', 'edited', 'rejected'")}
         if is_sqlite else {}
     )
+    if not is_sqlite:
+        op.execute("ALTER TABLE claims DROP CONSTRAINT IF EXISTS check_claim_review_status")
     with op.batch_alter_table('claims', schema=None, **claims_batch_kwargs) as batch_op:
         if not is_sqlite:
-            batch_op.drop_constraint('check_claim_review_status', type_='check')
             batch_op.create_check_constraint(
                 'check_claim_review_status',
                 "review_status IN ('unreviewed', 'needs_review', 'approved', 'edited', 'rejected')",
@@ -64,9 +65,10 @@ def upgrade() -> None:
         sa.CheckConstraint("action IN ('approve', 'edit', 'reject', 'flag', 'answer')", name='check_review_action'),
     )
     review_batch_kwargs = {"recreate": "always", "table_args": review_checks} if is_sqlite else {}
+    if not is_sqlite:
+        op.execute("ALTER TABLE review_events DROP CONSTRAINT IF EXISTS check_review_action")
     with op.batch_alter_table('review_events', schema=None, **review_batch_kwargs) as batch_op:
         if not is_sqlite:
-            batch_op.drop_constraint('check_review_action', type_='check')
             batch_op.create_check_constraint(
                 'check_review_action',
                 "action IN ('approve', 'edit', 'reject', 'flag', 'answer')",

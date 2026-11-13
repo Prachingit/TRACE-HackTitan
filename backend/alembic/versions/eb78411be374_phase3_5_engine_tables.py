@@ -76,9 +76,10 @@ def upgrade() -> None:
         sa.CheckConstraint("clearance_level IN ('public', 'team', 'restricted')", name='check_claim_clearance'),
     )
     claims_batch_kwargs = {"recreate": "always", "table_args": claim_checks} if is_sqlite else {}
+    if not is_sqlite:
+        op.execute("ALTER TABLE claims DROP CONSTRAINT IF EXISTS check_claim_type")
     with op.batch_alter_table('claims', schema=None, **claims_batch_kwargs) as batch_op:
         if not is_sqlite:
-            batch_op.drop_constraint('check_claim_type', type_='check')
             batch_op.create_check_constraint(
                 'check_claim_type',
                 "claim_type IN ('task_status', 'decision', 'ownership', 'blocker', 'dependency', 'contribution', 'testing', 'doc_gap')",

@@ -6,6 +6,8 @@ Tagline: 'When People Leave, Knowledge Shouldn't.'
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import sys
+import traceback
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,20 +31,28 @@ async def lifespan(app: FastAPI):
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
-    cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
-    command.upgrade(cfg, "head")
+    try:
+        cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+        cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
+        command.upgrade(cfg, "head")
+    except Exception:
+        print("[TRACE Startup] Alembic migration failed:", file=sys.stdout, flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        raise
 
     # Reset any sources stuck in 'parsing' from a previous crash & seed synthetic demo workspace
     db = SessionLocal()
     try:
         count = reset_stuck_sources(db)
         if count:
-            print(f"[TRACE Startup] Reset {count} stuck source(s) to 'queued'.")
+            print(f"[TRACE Startup] Reset {count} stuck source(s) to 'queued'.", flush=True)
         from app.services.demo import ensure_demo_seeded
         ensure_demo_seeded(db)
-    except Exception as exc:
-        print(f"[TRACE Startup] Demo seed skipped: {exc}")
+    except Exception:
+        print("[TRACE Startup] Demo seed / recovery failed:", file=sys.stdout, flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
     finally:
         db.close()
 

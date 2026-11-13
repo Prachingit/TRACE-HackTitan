@@ -316,3 +316,36 @@ def test_postgres_url_normalization_and_ephemeral_upload_resilience(tmp_path):
     r_retry = c_adm.post(f"/api/projects/demo-atlas-project/sources/{file_src['id']}/retry")
     assert r_retry.status_code == 409
     assert "ephemeral" in r_retry.json()["detail"].lower() or "re-upload" in r_retry.json()["detail"].lower()
+
+
+def test_alembic_models_in_sync_and_postgres_ddl_safe(monkeypatch, tmp_path):
+    """Fail if SQLAlchemy models and Alembic migrations diverge, or if Postgres DDL has unsafe DROP CONSTRAINT."""
+    import io
+    from pathlib import Path
+    from alembic import command
+    from alembic.config import Config
+    import app.config as app_config
+
+    backend_dir = Path(__file__).resolve().parent.parent
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+
+    # 1. Verify models and migrations do not diverge on a freshly migrated DB
+    db_file = tmp_path / "alembic_check.db"
+    monkeypatch.setattr(app_config.settings, "DATABASE_URL", f"sqlite:///{db_file.as_posix()}")
+    command.upgrade(cfg, "head")
+    command.check(cfg)
+
+    # 2. Verify PostgreSQL offline SQL generation succeeds and uses IF EXISTS for all DROP CONSTRAINTs
+    import contextlib
+    buf = io.StringIO()
+    pg_cfg = Config(str(backend_dir / "alembic.ini"))
+    pg_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+    monkeypatch.setattr(app_config.settings, "DATABASE_URL", "postgresql+psycopg://user:pass@localhost/db")
+    with contextlib.redirect_stdout(buf):
+        command.upgrade(pg_cfg, "head", sql=True)
+    ddl = buf.getvalue()
+    assert "ALTER TABLE handover_sections ADD COLUMN approved_with_gaps BOOLEAN DEFAULT false NOT NULL" in ddl
+    for line in ddl.splitlines():
+        if "DROP CONSTRAINT" in line.upper():
+            assert "IF EXISTS" in line.upper(), f"Unsafe DROP CONSTRAINT in Postgres DDL: {line}"
