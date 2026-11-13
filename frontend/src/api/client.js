@@ -101,7 +101,6 @@ export const api = {
 
   // Phase 4: Evidence Ledger
   claimDetail: (cid) => request(`/api/claims/${cid}`),
-  reviewClaim: (cid, d) => request(`/api/claims/${cid}/review`, { method: 'PATCH', json: d }),
   ledgerValidation: (pid) => request(`/api/projects/${pid}/ledger/validation`),
 
   // Phase 5: Contradiction Radar
@@ -109,6 +108,19 @@ export const api = {
   contradictionDetail: (id) => request(`/api/contradictions/${id}`),
   resolveContradiction: (id, note) =>
     request(`/api/contradictions/${id}/resolve`, { method: 'POST', json: { note } }),
+
+  // Phase 6: Exit Interview & Review Workbench
+  generateInterview: (pid) => request(`/api/projects/${pid}/interview/generate`, { method: 'POST' }),
+  interview: (pid, filters = {}) => request(`/api/projects/${pid}/interview${qs(filters)}`),
+  answerQuestion: (qid, answer) =>
+    request(`/api/interview/questions/${qid}/answer`, { method: 'POST', json: { answer } }),
+  skipQuestion: (qid, reason) =>
+    request(`/api/interview/questions/${qid}/skip`, { method: 'POST', json: { reason } }),
+  reviewQueue: (pid, filters = {}) => request(`/api/projects/${pid}/review/queue${qs(filters)}`),
+  reviewClaim: (cid, d) => request(`/api/claims/${cid}/review`, { method: 'POST', json: d }),
+  claimHistory: (cid) => request(`/api/claims/${cid}/history`),
+  bulkReview: (pid, claim_ids, note) =>
+    request(`/api/projects/${pid}/review/bulk`, { method: 'POST', json: { claim_ids, action: 'accept', note } }),
 };
 
 export default api;

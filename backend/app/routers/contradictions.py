@@ -204,6 +204,8 @@ def resolve_contradiction(
     _, membership = _get_scoped_project(ctr.project_id, current_user.id, db)
     if membership.role in HIDDEN_ROLES and ctr.clearance_level == "restricted":
         raise HTTPException(status_code=404, detail="Contradiction not found.")
+    if membership.role != "admin":
+        raise HTTPException(status_code=403, detail="Only the team lead (admin) can resolve contradictions.")
 
     note = (body.note or "").strip()
     if not note:

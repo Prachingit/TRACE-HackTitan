@@ -25,12 +25,13 @@ from app.models import (
     ReviewEvent,
     Run,
     Source,
+    User,
 )
 
 router = APIRouter(tags=["Analysis & Ledger"])
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class RunStageResponse(BaseModel):
     ordinal: int
@@ -59,9 +60,13 @@ class RunResponse(BaseModel):
 
 class EvidenceItemResponse(BaseModel):
     id: str
-    source_id: str
-    source_filename: str
-    source_type: str
+    evidence_type: str = "document"  # document | interview_answer
+    source_id: Optional[str] = None
+    source_filename: Optional[str] = None
+    source_type: Optional[str] = None
+    author_id: Optional[str] = None
+    question_id: Optional[str] = None
+    label: Optional[str] = None
     chunk_id: Optional[str] = None
     locator: Optional[str] = None
     author: Optional[str] = None
@@ -96,6 +101,13 @@ class ClaimResponse(BaseModel):
     primary_source_name: Optional[str] = None
     primary_locator: Optional[str] = None
     evidence_count: int = 0
+    interview_answer_count: int = 0
+    original_text: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_note: Optional[str] = None
+    version: int = 0
 
 
 class ClaimDetailResponse(ClaimResponse):
@@ -117,12 +129,7 @@ class ModuleRenameRequest(BaseModel):
     to_module: str
 
 
-class ClaimReviewRequest(BaseModel):
-    action: str  # approve | edit | reject
-    new_text: Optional[str] = None
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _get_scoped_project(project_id: str, user_id: str, db: Session) -> tuple[Project, Membership]:
     project = db.get(Project, project_id)
@@ -139,6 +146,8 @@ def _get_scoped_project(project_id: str, user_id: str, db: Session) -> tuple[Pro
 
 
 def _origin_label(clm: Claim) -> str:
+    if clm.extractor == "human":
+        return "human-authored"
     if clm.review_status in ("approved", "edited", "rejected"):
         return "human-reviewed"
     if clm.extractor == "llm":
@@ -174,19 +183,33 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
         except json.JSONDecodeError:
             attrs = {}
 
-    ev_rows = db.query(ClaimEvidence).filter(ClaimEvidence.claim_id == clm.id).all()
+    ev_rows = (
+        db.query(ClaimEvidence)
+        .filter(ClaimEvidence.claim_id == clm.id)
+        .order_by(ClaimEvidence.timestamp.asc().nullsfirst(), ClaimEvidence.id.asc())
+        .all()
+    )
     primary_source_id = None
     primary_source_name = None
     primary_locator = None
 
-    if ev_rows:
-        first_ev = ev_rows[0]
+    doc_rows = [e for e in ev_rows if e.evidence_type != "interview_answer" and e.source_id]
+    if doc_rows:
+        first_ev = doc_rows[0]
         primary_source_id = first_ev.source_id
         src = db.get(Source, first_ev.source_id)
         primary_source_name = src.filename if src else first_ev.source_id
         if first_ev.chunk_id:
             ch = db.get(Chunk, first_ev.chunk_id)
             primary_locator = ch.locator if ch else None
+
+    reviewer = db.get(User, clm.reviewed_by) if clm.reviewed_by else None
+    last_ev = (
+        db.query(ReviewEvent.version)
+        .filter(ReviewEvent.claim_id == clm.id)
+        .order_by(ReviewEvent.version.desc())
+        .first()
+    )
 
     base_kwargs = dict(
         id=clm.id,
@@ -212,6 +235,13 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
         primary_source_name=primary_source_name,
         primary_locator=primary_locator,
         evidence_count=len(ev_rows),
+        interview_answer_count=len([e for e in ev_rows if e.evidence_type == "interview_answer"]),
+        original_text=clm.original_text,
+        reviewed_by=clm.reviewed_by,
+        reviewed_by_name=reviewer.name if reviewer else None,
+        reviewed_at=clm.reviewed_at,
+        review_note=clm.review_note,
+        version=(last_ev[0] if last_ev and last_ev[0] else 0),
     )
 
     if not include_evidence:
@@ -219,8 +249,13 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
 
     evidence_items: List[EvidenceItemResponse] = []
     for ev in ev_rows:
-        src = db.get(Source, ev.source_id)
+        src = db.get(Source, ev.source_id) if ev.source_id else None
         ch = db.get(Chunk, ev.chunk_id) if ev.chunk_id else None
+        is_answer = ev.evidence_type == "interview_answer"
+        label = None
+        if is_answer:
+            when = ev.timestamp.strftime("%Y-%m-%d") if ev.timestamp else "unknown date"
+            label = f"Interview answer, by {ev.author or 'unknown'}, {when}"
         chunk_text = ch.text if ch else None
         h_start: Optional[int] = None
         h_end: Optional[int] = None
@@ -233,9 +268,13 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
         evidence_items.append(
             EvidenceItemResponse(
                 id=ev.id,
+                evidence_type=ev.evidence_type or "document",
                 source_id=ev.source_id,
-                source_filename=src.filename if src else ev.source_id,
-                source_type=src.type if src else "unknown",
+                source_filename=(src.filename if src else ev.source_id) if not is_answer else None,
+                source_type=(src.type if src else "unknown") if not is_answer else "interview_answer",
+                author_id=ev.author_id,
+                question_id=ev.question_id,
+                label=label,
                 chunk_id=ev.chunk_id,
                 locator=ch.locator if ch else None,
                 author=ev.author or (ch.author if ch else None),
@@ -250,7 +289,7 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
     return ClaimDetailResponse(**base_kwargs, evidence=evidence_items)
 
 
-# ── Analysis Run Endpoints ────────────────────────────────────────────────────
+# â”€â”€ Analysis Run Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.post("/api/projects/{project_id}/analyze", response_model=RunResponse, status_code=status.HTTP_202_ACCEPTED)
 def start_project_analysis(
@@ -286,7 +325,7 @@ def get_latest_run(
     return _serialize_run(run)
 
 
-# ── Timeline Endpoints ────────────────────────────────────────────────────────
+# â”€â”€ Timeline Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.get("/api/projects/{project_id}/timeline")
 def get_project_timeline(
@@ -308,7 +347,7 @@ def get_timeline_query(
     return build_timeline(db, project_id, role=membership.role)
 
 
-# ── Modules Endpoints ─────────────────────────────────────────────────────────
+# â”€â”€ Modules Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _list_project_modules(project_id: str, role: str, db: Session) -> List[ModuleSummaryResponse]:
     q = db.query(Claim).filter(Claim.project_id == project_id)
@@ -393,7 +432,7 @@ def rename_or_merge_module(
     return _list_project_modules(project_id, membership.role, db)
 
 
-# ── Claims & Evidence Ledger Endpoints ────────────────────────────────────────
+# â”€â”€ Claims & Evidence Ledger Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _query_project_claims(
     project_id: str,
@@ -480,46 +519,6 @@ def get_claim_detail(
     _, membership = _get_scoped_project(clm.project_id, current_user.id, db)
     if membership.role in HIDDEN_ROLES and clm.clearance_level == "restricted":
         raise HTTPException(status_code=404, detail="Claim not found.")
-    return _serialize_claim(clm, db, include_evidence=True)
-
-
-@router.patch("/api/claims/{claim_id}/review", response_model=ClaimDetailResponse)
-def review_claim(
-    claim_id: str,
-    body: ClaimReviewRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Record a human review action (approve / edit / reject) on a claim."""
-    clm = db.get(Claim, claim_id)
-    if not clm:
-        raise HTTPException(status_code=404, detail="Claim not found.")
-    _, membership = _get_scoped_project(clm.project_id, current_user.id, db)
-    if membership.role in HIDDEN_ROLES and clm.clearance_level == "restricted":
-        raise HTTPException(status_code=404, detail="Claim not found.")
-
-    action_map = {"approve": "approved", "edit": "edited", "reject": "rejected"}
-    if body.action not in action_map:
-        raise HTTPException(status_code=400, detail="Invalid review action. Use approve, edit, or reject.")
-
-    old_text = clm.text
-    if body.action == "edit":
-        if not body.new_text or not body.new_text.strip():
-            raise HTTPException(status_code=400, detail="new_text is required when editing a claim.")
-        clm.text = body.new_text.strip()
-
-    clm.review_status = action_map[body.action]
-    db.add(
-        ReviewEvent(
-            claim_id=clm.id,
-            reviewer_id=current_user.id,
-            action=body.action,
-            old_text=old_text,
-            new_text=clm.text,
-        )
-    )
-    db.commit()
-    db.refresh(clm)
     return _serialize_claim(clm, db, include_evidence=True)
 
 

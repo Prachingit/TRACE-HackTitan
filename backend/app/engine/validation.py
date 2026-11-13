@@ -48,6 +48,20 @@ def validate_project_citations(
 
         for ev in ev_rows:
             total_citations += 1
+            if ev.evidence_type == "interview_answer":
+                # Authored by a person, not cited from a chunk: valid when it carries text and an author.
+                if (ev.excerpt or "").strip() and (ev.author_id or ev.author):
+                    valid_citations += 1
+                    valid_for_claim += 1
+                else:
+                    invalid_citations += 1
+                    invalid_details.append({
+                        "claim_id": clm.id,
+                        "evidence_id": ev.id,
+                        "chunk_id": None,
+                        "reason": "Interview answer has no text or author.",
+                    })
+                continue
             ch = db.get(Chunk, ev.chunk_id) if ev.chunk_id else None
             if ch is None:
                 invalid_citations += 1

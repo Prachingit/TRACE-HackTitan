@@ -71,9 +71,8 @@ Claims carry `id` (`CLM-...`), `claim_type` (`task_status`, `decision`, `ownersh
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/projects/{id}/claims` | Filters: `type`, `module`, `status`, `owner`, `review_status`, `q`. Clearance-filtered. (Also `GET /claims?project_id=...`). |
-| GET | `/claims/{claim_id}` | Full claim detail + `evidence[]` with `chunk_text`, `excerpt`, `highlight_start`, `highlight_end`. 404 if restricted for `incoming`/`departing` or cross-workspace. |
-| PATCH | `/claims/{claim_id}/review` | `{review_status, title?, text?, owner_name?, module?}`. Sets `origin_label` to `human-reviewed`. |
-| GET | `/projects/{id}/ledger/validation` | Verifies every `ClaimEvidence.excerpt` exists in `Chunk.text`. Downgrades `verified` claims with 0 valid citations to `missing`. |
+| GET | `/claims/{claim_id}` | Full claim detail + `evidence[]` with `chunk_text`, `excerpt`, `highlight_start`, `highlight_end` (and `evidence_type: "interview_answer"` with `label` for interview answers). 404 if restricted for `incoming`/`departing` or cross-workspace. |
+| GET | `/projects/{id}/ledger/validation` | Verifies every `ClaimEvidence.excerpt` exists in `Chunk.text` (and interview answers carry text + author). Downgrades `verified` claims with 0 valid citations to `missing`. |
 
 ## Contradiction Radar (Phase 5)
 8 deterministic rules: `STATUS_WITHOUT_EVIDENCE`, `CONFLICTING_STATUS`, `CONFLICTING_OWNERSHIP`, `UNRESOLVED_DEPENDENCY`, `STALE_ACTIVITY`, `UNDOCUMENTED_WORK`, `UNASSIGNED_RESPONSIBILITY`, `MISSING_TEST_EVIDENCE`.
@@ -83,4 +82,16 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 |---|---|---|
 | GET | `/projects/{id}/contradictions` | Filters: `rule_code`, `status`, `severity`. Sorted open-first, then high -> medium -> low. Clearance-filtered. |
 | GET | `/contradictions/{contradiction_id}` | Detail including `conflicting_sources[]` and full involved `claims[]` with highlighted evidence. 404 if restricted/cross-workspace. |
-| POST | `/contradictions/{contradiction_id}/resolve` | `{note}`. Requires non-empty note (400 otherwise). Marks `status="resolved"` with `resolved_by`, `resolved_at`, `resolution_note`. Does not silently flip claims to `verified`. |
+| POST | `/contradictions/{contradiction_id}/resolve` | Admin only (403 otherwise). `{note}`. Requires non-empty note (400 otherwise). Marks `status="resolved"` with `resolved_by`, `resolved_at`, `resolution_note`. Does not silently flip claims to `verified`. |
+
+## Exit Interview & Review Workbench (Phase 6)
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/projects/{id}/interview/generate` | Admin only (403 otherwise). Generates idempotent questions from real gaps; never duplicates or deletes answered/skipped questions. |
+| GET | `/projects/{id}/interview` | Filters: `module`, `person`, `status` (`answered` / `unanswered` / `skipped`). Returns DB progress, `by_module`, `by_person`, and questions with source context. 403 for `incoming`. |
+| POST | `/interview/questions/{id}/answer` | `{answer}`. Admin or assigned `team_member`/`departing` (403 otherwise). Creates `ClaimEvidence(evidence_type="interview_answer")` attributed to signed-in user; moves claim to `needs_review` (or creates `human` claim if none). Never auto-verifies. |
+| POST | `/interview/questions/{id}/skip` | `{reason}`. Admin or assigned `team_member`/`departing`. Requires non-empty reason (400). |
+| GET | `/projects/{id}/review/queue` | Prioritised queue (`conflicting`, `missing`, `inferred`, `unreviewed`). `scope=open\|all`, `module`. Admin or `team_member` (403 for `incoming`/`departing`). |
+| POST | `/claims/{claim_id}/review` | `{action: accept\|edit\|reject\|flag, text?, note?, resolve_contradictions?}`. `accept`/`edit`/`reject` admin-only (403); `flag` admin or `team_member`. Appends a `ReviewEvent`. `accept` requires valid evidence and no open contradictions (409 otherwise unless `resolve_contradictions=true` with required note). |
+| GET | `/claims/{claim_id}/history` | Append-only `ReviewEvent` list with version numbers and word-level diffs for edits. No update/delete endpoint exists. |
+| POST | `/projects/{id}/review/bulk` | Admin only (403). `{claim_ids, action: "accept", note?}`. Accepts eligible claims and returns `accepted[]` and `skipped[]` with reasons. |

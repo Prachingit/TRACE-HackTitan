@@ -10,6 +10,8 @@ import {
   FileCheck2,
   AlertTriangle,
   Activity,
+  MessageSquareText,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -68,6 +70,7 @@ export function VerificationBadge({ status }) {
 
 const ORIGIN_META = {
   'human-reviewed': { cls: 'ok', label: 'Human-reviewed' },
+  'human-authored': { cls: 'ok', label: 'Human-authored' },
   'ai-extracted': { cls: 'info', label: 'AI-extracted' },
   'rule-extracted': { cls: '', label: 'Rule-extracted' },
 };
@@ -92,6 +95,8 @@ export function ProjectSubnav({ projectId }) {
       <NavLink to={`/projects/${projectId}/knowledge`}>Knowledge base</NavLink>
       <NavLink to={`/projects/${projectId}/ledger`}>Evidence ledger</NavLink>
       <NavLink to={`/projects/${projectId}/contradictions`}>Contradiction radar</NavLink>
+      <NavLink to={`/projects/${projectId}/interview`}>Exit interview</NavLink>
+      <NavLink to={`/projects/${projectId}/review`}>Review workbench</NavLink>
     </nav>
   );
 }
@@ -120,6 +125,8 @@ export function Layout() {
           <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
           <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>
           <NavLink to="/contradictions"><AlertTriangle size={16} strokeWidth={1.5} />Contradictions</NavLink>
+          <NavLink to="/interview"><MessageSquareText size={16} strokeWidth={1.5} />Exit interview</NavLink>
+          <NavLink to="/review"><ClipboardCheck size={16} strokeWidth={1.5} />Review workbench</NavLink>
           <NavLink to="/team"><Users size={16} strokeWidth={1.5} />Team</NavLink>
           <NavLink to="/integrations"><Plug size={16} strokeWidth={1.5} />Integrations</NavLink>
         </nav>

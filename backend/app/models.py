@@ -193,7 +193,7 @@ class Claim(Base):
     review_status = Column(
         String(32),
         CheckConstraint(
-            "review_status IN ('unreviewed', 'approved', 'edited', 'rejected')",
+            "review_status IN ('unreviewed', 'needs_review', 'approved', 'edited', 'rejected')",
             name="check_claim_review_status",
         ),
         nullable=False,
@@ -218,9 +218,14 @@ class Claim(Base):
     run_id = Column(String(64), nullable=True)
     attrs_json = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)
+    # Phase 6 additions
+    original_text = Column(Text, nullable=True)  # text before the first human edit
+    reviewed_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_note = Column(Text, nullable=True)
 
     project = relationship("Project", back_populates="claims")
-    owner = relationship("User")
+    owner = relationship("User", foreign_keys=[owner_id])
     evidences = relationship("ClaimEvidence", back_populates="claim", cascade="all, delete-orphan")
     contradictions = relationship("Contradiction", secondary="contradiction_claims", back_populates="claims")
     review_events = relationship("ReviewEvent", back_populates="claim", cascade="all, delete-orphan")
@@ -231,11 +236,16 @@ class ClaimEvidence(Base):
 
     id = Column(String(64), primary_key=True, default=generate_uuid)
     claim_id = Column(String(64), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False, index=True)
-    source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Nullable: interview answers are authored by a person and have no source document.
+    source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=True, index=True)
     chunk_id = Column(String(64), ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True, index=True)
     excerpt = Column(Text, nullable=False)
     author = Column(String(128), nullable=True)
     timestamp = Column(DateTime(timezone=True), nullable=True)
+    # Phase 6 additions
+    evidence_type = Column(String(32), nullable=False, default="document", server_default="document")  # document | interview_answer
+    author_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    question_id = Column(String(64), nullable=True, index=True)
 
     claim = relationship("Claim", back_populates="evidences")
     source = relationship("Source", back_populates="evidences")
@@ -289,14 +299,29 @@ class InterviewQuestion(Base):
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     claim_id = Column(String(64), ForeignKey("claims.id", ondelete="SET NULL"), nullable=True, index=True)
     module = Column(String(64), nullable=False)
-    target_person_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_person_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=True)
     answered_at = Column(DateTime(timezone=True), nullable=True)
+    # Phase 6 additions
+    contradiction_id = Column(String(64), ForeignKey("contradictions.id", ondelete="SET NULL"), nullable=True, index=True)
+    gap_type = Column(String(48), nullable=False, default="claim_gap", server_default="claim_gap")
+    priority = Column(String(16), nullable=False, default="medium", server_default="medium")  # high | medium | low
+    status = Column(String(16), nullable=False, default="open", server_default="open")  # open | answered | skipped
+    skip_reason = Column(Text, nullable=True)
+    skipped_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    skipped_at = Column(DateTime(timezone=True), nullable=True)
+    answered_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    fingerprint = Column(String(64), nullable=True, index=True)
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    target_label = Column(String(128), nullable=True)  # person name, or 'unassigned'
+    text_source = Column(String(16), nullable=False, default="template", server_default="template")  # template | llm
+    facts_json = Column(Text, nullable=True)  # real values used to fill the template
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     project = relationship("Project")
     claim = relationship("Claim")
-    target_person = relationship("User")
+    target_person = relationship("User", foreign_keys=[target_person_id])
 
 
 class ReviewEvent(Base):
@@ -307,13 +332,17 @@ class ReviewEvent(Base):
     reviewer_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     action = Column(
         String(16),
-        CheckConstraint("action IN ('approve', 'edit', 'reject', 'flag')", name="check_review_action"),
+        CheckConstraint("action IN ('approve', 'edit', 'reject', 'flag', 'answer')", name="check_review_action"),
         nullable=False,
     )
     old_text = Column(Text, nullable=True)
     new_text = Column(Text, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     version = Column(Integer, nullable=False, default=1)
+    # Phase 6 additions
+    note = Column(Text, nullable=True)
+    resulting_review_status = Column(String(32), nullable=True)
+    resulting_verification_status = Column(String(32), nullable=True)
 
     claim = relationship("Claim", back_populates="review_events")
     reviewer = relationship("User")
@@ -428,4 +457,14 @@ class ModuleAlias(Base):
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     alias = Column(String(128), nullable=False)
     target = Column(String(128), nullable=False)
+
+
+
+# Review history is append-only: updates are blocked at the ORM layer.
+from sqlalchemy import event  # noqa: E402
+
+
+@event.listens_for(ReviewEvent, "before_update")
+def _review_events_are_append_only(mapper, connection, target):  # pragma: no cover - guard
+    raise ValueError("ReviewEvent rows are append-only and cannot be modified.")
 

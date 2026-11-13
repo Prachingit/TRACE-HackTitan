@@ -24,7 +24,7 @@ const CLAIM_TYPES = [
 ];
 
 const VERIFICATION_STATUSES = ['verified', 'inferred', 'conflicting', 'missing'];
-const REVIEW_STATUSES = ['unreviewed', 'approved', 'edited', 'rejected'];
+const REVIEW_STATUSES = ['unreviewed', 'needs_review', 'approved', 'edited', 'rejected'];
 
 export function HighlightedChunkText({ chunkText, excerpt, highlightStart, highlightEnd }) {
   if (!chunkText) return <div className="chunk-box muted">Chunk text unavailable.</div>;
@@ -64,6 +64,8 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
   const [detail, setDetail] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectNote, setRejectNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -71,6 +73,8 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
     if (!claimId) return;
     setDetail(null);
     setEditing(false);
+    setRejecting(false);
+    setRejectNote('');
     setErr('');
     api.claimDetail(claimId).then((d) => {
       setDetail(d);
@@ -86,10 +90,13 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
     try {
       const updated = await api.reviewClaim(claimId, {
         action,
-        new_text: action === 'edit' ? editText : undefined,
+        text: action === 'edit' ? editText : undefined,
+        note: action === 'reject' ? rejectNote : undefined,
       });
       setDetail(updated);
       setEditing(false);
+      setRejecting(false);
+      setRejectNote('');
       if (onUpdated) onUpdated(updated);
     } catch (x) {
       setErr(x.message);
@@ -136,16 +143,36 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
                   {' · '}Event date: {fmtDate(detail.event_time)}
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  <button className="btn sm" disabled={busy} onClick={() => submitReview('approve')}>
-                    <Check size={12} strokeWidth={1.5} />Approve
+                  <button className="btn sm" disabled={busy} onClick={() => submitReview('accept')}>
+                    <Check size={12} strokeWidth={1.5} />Accept
                   </button>
-                  <button className="btn sm" disabled={busy} onClick={() => setEditing(true)}>
+                  <button className="btn sm" disabled={busy} onClick={() => { setEditing(true); setRejecting(false); }}>
                     <Edit3 size={12} strokeWidth={1.5} />Edit claim
                   </button>
-                  <button className="btn sm danger" disabled={busy} onClick={() => submitReview('reject')}>
+                  <button className="btn sm danger" disabled={busy} onClick={() => { setRejecting(!rejecting); setEditing(false); }}>
                     <XCircle size={12} strokeWidth={1.5} />Reject
                   </button>
+                  <Link className="btn sm" to={`/projects/${projectId || detail.project_id}/review?claim=${claimId}`}>
+                    Open in Review Workbench
+                  </Link>
                 </div>
+                {rejecting && (
+                  <div style={{ marginTop: 10 }}>
+                    <label htmlFor="drawer-reject-note">Reason for rejection (required)</label>
+                    <input
+                      id="drawer-reject-note"
+                      value={rejectNote}
+                      onChange={(e) => setRejectNote(e.target.value)}
+                      placeholder="Explain why this claim should be excluded"
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button className="btn sm danger" disabled={busy || !rejectNote.trim()} onClick={() => submitReview('reject')}>
+                        Confirm reject
+                      </button>
+                      <button className="btn sm" type="button" onClick={() => setRejecting(false)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="card">
@@ -173,30 +200,45 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
                 This claim has no linked source chunk and cannot be verified.
               </EmptyState>
             ) : (
-              detail.evidence.map((ev) => (
-                <div key={ev.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <Link to={`/projects/${projectId || detail.project_id}/sources/${ev.source_id}`}>
-                        <strong className="mono">{ev.source_id}</strong> — {ev.source_filename}
-                      </Link>
+              detail.evidence.map((ev) => {
+                const isAnswer = ev.evidence_type === 'interview_answer';
+                if (isAnswer) {
+                  const ansLabel = ev.label || `Interview answer, by ${ev.author || 'Unknown'}, ${ev.timestamp ? new Date(ev.timestamp).toISOString().slice(0, 10) : 'unknown date'}`;
+                  return (
+                    <div key={ev.id} className="card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <span className="badge info"><span className="badge-dot" />{ansLabel}</span>
+                        {ev.question_id && <span className="mono muted">Q:{ev.question_id.slice(0, 8)}</span>}
+                      </div>
+                      <div className="evidence-answer">{ev.excerpt}</div>
                     </div>
-                    <span className="badge mono">{ev.locator || 'chunk'}</span>
+                  );
+                }
+                return (
+                  <div key={ev.id} className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <Link to={`/projects/${projectId || detail.project_id}/sources/${ev.source_id}`}>
+                          <strong className="mono">{ev.source_id}</strong> — {ev.source_filename}
+                        </Link>
+                      </div>
+                      <span className="badge mono">{ev.locator || 'chunk'}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      Author: {ev.author || '-'} · Date: {fmtDate(ev.timestamp)} · Type: {ev.source_type}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 12 }} className="muted">
+                      Exact excerpt highlighted inside surrounding source chunk:
+                    </div>
+                    <HighlightedChunkText
+                      chunkText={ev.chunk_text}
+                      excerpt={ev.excerpt}
+                      highlightStart={ev.highlight_start}
+                      highlightEnd={ev.highlight_end}
+                    />
                   </div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    Author: {ev.author || '-'} · Date: {fmtDate(ev.timestamp)} · Type: {ev.source_type}
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 12 }} className="muted">
-                    Exact excerpt highlighted inside surrounding source chunk:
-                  </div>
-                  <HighlightedChunkText
-                    chunkText={ev.chunk_text}
-                    excerpt={ev.excerpt}
-                    highlightStart={ev.highlight_start}
-                    highlightEnd={ev.highlight_end}
-                  />
-                </div>
-              ))
+                );
+              })
             )}
           </>
         )}

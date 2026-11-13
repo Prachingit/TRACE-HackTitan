@@ -33,6 +33,8 @@ export function Overview() {
                 <th>Chunks</th>
                 <th>Members</th>
                 <th>Total claims</th>
+                <th>Reviewed</th>
+                <th>Open questions</th>
                 <th>Claim status breakdown</th>
                 <th>Open contradictions</th>
                 <th />
@@ -51,6 +53,26 @@ export function Overview() {
                     <td className="mono">{s.chunk_count}</td>
                     <td className="mono">{s.member_count}</td>
                     <td className="mono">{s.analysed ? s.claim_count : <span className="muted">Not analysed yet</span>}</td>
+                    <td className="mono">
+                      {!s.analysed ? (
+                        <span className="muted">Not analysed yet</span>
+                      ) : (
+                        <Link to={`/projects/${p.id}/review`}>
+                          {s.reviewed_claim_count} / {s.claim_count}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="mono">
+                      {!s.analysed ? (
+                        <span className="muted">Not analysed yet</span>
+                      ) : s.total_question_count === 0 ? (
+                        <Link to={`/projects/${p.id}/interview`} className="muted">Not generated</Link>
+                      ) : (
+                        <Link to={`/projects/${p.id}/interview`}>
+                          {s.open_question_count} / {s.total_question_count}
+                        </Link>
+                      )}
+                    </td>
                     <td>
                       {!s.analysed ? (
                         <span className="muted">Not analysed yet</span>

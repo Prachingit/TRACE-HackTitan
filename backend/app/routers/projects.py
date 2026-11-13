@@ -14,6 +14,7 @@ from app.models import (
     Chunk,
     Claim,
     Contradiction,
+    InterviewQuestion,
     Membership,
     Project,
     Run,
@@ -97,6 +98,12 @@ class ProjectSummaryResponse(BaseModel):
     claims_by_type: dict = {}
     open_contradiction_count: int
     chunk_count: int
+    # Phase 6: review and interview progress, all counted from the database
+    reviewed_claim_count: int = 0
+    claims_needing_review_count: int = 0
+    total_question_count: int = 0
+    answered_question_count: int = 0
+    open_question_count: int = 0
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -330,6 +337,16 @@ def get_project_summary(
         is not None
     )
 
+    reviewed_claim_count = clm_q.filter(Claim.review_status.in_(("approved", "edited", "rejected"))).count()
+    claims_needing_review_count = clm_q.filter(Claim.review_status.in_(("unreviewed", "needs_review", "edited"))).count()
+
+    qn_q = db.query(InterviewQuestion).filter(InterviewQuestion.project_id == project_id)
+    if membership.role != "admin":
+        qn_q = qn_q.filter(InterviewQuestion.clearance_level != "restricted")
+    total_question_count = qn_q.count()
+    answered_question_count = qn_q.filter(InterviewQuestion.status == "answered").count()
+    open_question_count = qn_q.filter(InterviewQuestion.status == "open").count()
+
     return ProjectSummaryResponse(
         project_id=project.id,
         project_name=project.name,
@@ -343,4 +360,9 @@ def get_project_summary(
         claims_by_type=claims_by_type,
         open_contradiction_count=open_contradiction_count,
         chunk_count=chunk_count,
+        reviewed_claim_count=reviewed_claim_count,
+        claims_needing_review_count=claims_needing_review_count,
+        total_question_count=total_question_count,
+        answered_question_count=answered_question_count,
+        open_question_count=open_question_count,
     )

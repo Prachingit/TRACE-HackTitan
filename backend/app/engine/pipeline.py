@@ -168,11 +168,23 @@ def execute_run(
         current_stage = stages["preparing"]
         _start_stage(db, current_stage)
 
-        # Preserve human-reviewed claims (approved / edited / rejected); remove only unreviewed
+        # Preserve human work (reviewed, flagged, human-authored, or carrying interview answers); remove only
+        # untouched machine-extracted claims.
         existing_claims = db.query(Claim).filter(Claim.project_id == project.id).all()
+        answered_claim_ids = {
+            row[0]
+            for row in db.query(ClaimEvidence.claim_id)
+            .filter(ClaimEvidence.evidence_type == "interview_answer")
+            .all()
+        }
         reviewed_fingerprints = set()
         for ec in existing_claims:
-            if ec.review_status != "unreviewed":
+            keep = (
+                ec.review_status != "unreviewed"
+                or ec.extractor == "human"
+                or ec.id in answered_claim_ids
+            )
+            if keep:
                 if ec.fingerprint:
                     reviewed_fingerprints.add(ec.fingerprint)
             else:

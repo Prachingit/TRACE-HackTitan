@@ -246,9 +246,9 @@ def test_analyze_stages_idempotency_and_reviewed_claim_survival(client):
 
     # Human reviews one claim (edits text and approves)
     target_id = claims_1[0]["id"]
-    rev = admin.patch(
+    rev = admin.post(
         f"/api/claims/{target_id}/review",
-        json={"action": "edit", "new_text": "Human-verified statement for handover."},
+        json={"action": "edit", "text": "Human-verified statement for handover."},
     )
     assert rev.status_code == 200
     assert rev.json()["review_status"] == "edited"
