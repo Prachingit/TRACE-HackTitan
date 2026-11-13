@@ -3,21 +3,17 @@ services:
     name: trace-app
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter
+    plan: free
     healthCheckPath: /api/health
-    disk:
-      name: trace-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: ENV
         value: production
       - key: PORT
         value: "8000"
       - key: DATA_DIR
-        value: /data/uploads
+        value: /tmp/trace_uploads
       - key: DATABASE_URL
-        value: sqlite:////data/trace.db
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOWED_ORIGINS

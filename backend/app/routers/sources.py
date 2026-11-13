@@ -501,6 +501,12 @@ def retry_source(
     if source.status not in ("failed", "queued"):
         raise HTTPException(400, f"Cannot retry a source with status '{source.status}'.")
 
+    if source.type not in ("manual", "github") and (not source.file_path or not Path(source.file_path).exists()):
+        raise HTTPException(
+            409,
+            "Uploaded file is no longer on disk (ephemeral storage was reset after a restart). Please re-upload the file.",
+        )
+
     source.status = "queued"
     db.commit()
     background_tasks.add_task(run_parse_job, source_id)

@@ -34,7 +34,9 @@ def parse_source(source_id: str, db: Session) -> None:
 
         file_path = source.file_path
         if not file_path or not Path(file_path).exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise FileNotFoundError(
+                f"Uploaded file is no longer on disk (ephemeral storage was reset): {file_path}. Please re-upload the file."
+            )
 
         raw_chunks = _dispatch(source.type, file_path)
         _persist_chunks(source_id, raw_chunks, db)

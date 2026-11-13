@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_BASE_URL: str = "https://api.openai.com/v1"
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                return "postgresql+psycopg://" + v[len("postgres://"):]
+            if v.startswith("postgresql://"):
+                return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
+
     @field_validator(
         "SECRET_KEY", "GITHUB_TOKEN", "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_PORT",
         "LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL",

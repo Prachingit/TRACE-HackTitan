@@ -65,6 +65,8 @@ def upgrade() -> None:
     with op.batch_alter_table('run_stages', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_run_stages_run_id'), ['run_id'], unique=False)
 
+    is_sqlite = op.get_context().dialect.name == "sqlite"
+
     # SQLite batch rebuilds do not carry CHECK constraints over, so they are re-declared here.
     # claim_type is widened to include 'testing' (autogenerate cannot detect CHECK changes).
     claim_checks = (
@@ -73,7 +75,14 @@ def upgrade() -> None:
         sa.CheckConstraint("review_status IN ('unreviewed', 'approved', 'edited', 'rejected')", name='check_claim_review_status'),
         sa.CheckConstraint("clearance_level IN ('public', 'team', 'restricted')", name='check_claim_clearance'),
     )
-    with op.batch_alter_table('claims', schema=None, recreate='always', table_args=claim_checks) as batch_op:
+    claims_batch_kwargs = {"recreate": "always", "table_args": claim_checks} if is_sqlite else {}
+    with op.batch_alter_table('claims', schema=None, **claims_batch_kwargs) as batch_op:
+        if not is_sqlite:
+            batch_op.drop_constraint('check_claim_type', type_='check')
+            batch_op.create_check_constraint(
+                'check_claim_type',
+                "claim_type IN ('task_status', 'decision', 'ownership', 'blocker', 'dependency', 'contribution', 'testing', 'doc_gap')",
+            )
         batch_op.add_column(sa.Column('title', sa.String(length=255), nullable=True))
         batch_op.add_column(sa.Column('owner_name', sa.String(length=128), nullable=True))
         batch_op.add_column(sa.Column('author', sa.String(length=128), nullable=True))
@@ -90,7 +99,8 @@ def upgrade() -> None:
         sa.CheckConstraint("severity IN ('low', 'medium', 'high')", name='check_contradiction_severity'),
         sa.CheckConstraint("status IN ('open', 'resolved')", name='check_contradiction_status'),
     )
-    with op.batch_alter_table('contradictions', schema=None, recreate='always', table_args=contradiction_checks) as batch_op:
+    ctr_batch_kwargs = {"recreate": "always", "table_args": contradiction_checks} if is_sqlite else {}
+    with op.batch_alter_table('contradictions', schema=None, **ctr_batch_kwargs) as batch_op:
         batch_op.add_column(sa.Column('conflicting_source_ids', sa.Text(), nullable=True))
         batch_op.add_column(sa.Column('fingerprint', sa.String(length=64), nullable=True))
         batch_op.add_column(sa.Column('clearance_level', sa.String(length=32), server_default='team', nullable=False))

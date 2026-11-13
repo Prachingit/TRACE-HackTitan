@@ -277,3 +277,42 @@ def test_demo_workspace_and_role_isolation():
     c_dep = TestClient(app, raise_server_exceptions=False)
     assert c_dep.post("/api/auth/demo", json={"role": "departing"}).status_code == 200
     assert c_dep.get("/api/handovers").json() == []
+
+
+def test_postgres_url_normalization_and_ephemeral_upload_resilience(tmp_path):
+    """Verify postgres:// URLs normalize to postgresql+psycopg:// and missing upload files never 500."""
+    from pathlib import Path
+    from app.config import Settings
+    from app.db import SessionLocal
+    from app.models import Source
+
+    s1 = Settings(DATABASE_URL="postgres://u:p@host:5432/db", SECRET_KEY="x" * 32)
+    s2 = Settings(DATABASE_URL="postgresql://u:p@host:5432/db", SECRET_KEY="x" * 32)
+    assert s1.DATABASE_URL == "postgresql+psycopg://u:p@host:5432/db"
+    assert s2.DATABASE_URL == "postgresql+psycopg://u:p@host:5432/db"
+
+    c_adm = TestClient(app, raise_server_exceptions=False)
+    assert c_adm.post("/api/auth/demo", json={"role": "admin"}).status_code == 200
+    srcs = c_adm.get("/api/projects/demo-atlas-project/sources").json()
+    file_src = next(s for s in srcs if s["type"] in ("markdown", "csv", "chat_json"))
+
+    # Simulate ephemeral disk wipe: remove the stored file and set source status to failed
+    db = SessionLocal()
+    try:
+        db_src = db.get(Source, file_src["id"])
+        assert db_src is not None
+        if db_src.file_path:
+            Path(db_src.file_path).unlink(missing_ok=True)
+        db_src.status = "failed"
+        db.commit()
+    finally:
+        db.close()
+
+    # Listing sources and reading parsed chunks from DB still work without 500
+    assert c_adm.get("/api/projects/demo-atlas-project/sources").status_code == 200
+    assert c_adm.get(f"/api/projects/demo-atlas-project/sources/{file_src['id']}/chunks").status_code == 200
+
+    # Retrying a source whose file was wiped returns 409 with clear message (not 500)
+    r_retry = c_adm.post(f"/api/projects/demo-atlas-project/sources/{file_src['id']}/retry")
+    assert r_retry.status_code == 409
+    assert "ephemeral" in r_retry.json()["detail"].lower() or "re-upload" in r_retry.json()["detail"].lower()

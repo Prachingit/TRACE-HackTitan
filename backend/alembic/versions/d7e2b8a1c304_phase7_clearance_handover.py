@@ -44,7 +44,7 @@ def upgrade() -> None:
     with op.batch_alter_table('handover_sections', schema=None) as batch_op:
         batch_op.add_column(sa.Column('title', sa.String(length=255), nullable=True))
         batch_op.add_column(sa.Column('ordinal', sa.Integer(), server_default='0', nullable=False))
-        batch_op.add_column(sa.Column('approved_with_gaps', sa.Boolean(), server_default='0', nullable=False))
+        batch_op.add_column(sa.Column('approved_with_gaps', sa.Boolean(), server_default=sa.false(), nullable=False))
         batch_op.add_column(sa.Column('gap_note', sa.Text(), nullable=True))
         batch_op.add_column(sa.Column('reviewed_by', sa.String(length=64), nullable=True))
         batch_op.add_column(sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True))

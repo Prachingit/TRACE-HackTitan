@@ -33,11 +33,19 @@ def _claim_checks(review_values: str):
 
 
 def upgrade() -> None:
+    is_sqlite = op.get_context().dialect.name == "sqlite"
     # SQLite batch rebuilds drop reflected CHECK constraints, so they are re-declared explicitly.
-    with op.batch_alter_table(
-        'claims', schema=None, recreate='always',
-        table_args=_claim_checks("'unreviewed', 'needs_review', 'approved', 'edited', 'rejected'"),
-    ) as batch_op:
+    claims_batch_kwargs = (
+        {"recreate": "always", "table_args": _claim_checks("'unreviewed', 'needs_review', 'approved', 'edited', 'rejected'")}
+        if is_sqlite else {}
+    )
+    with op.batch_alter_table('claims', schema=None, **claims_batch_kwargs) as batch_op:
+        if not is_sqlite:
+            batch_op.drop_constraint('check_claim_review_status', type_='check')
+            batch_op.create_check_constraint(
+                'check_claim_review_status',
+                "review_status IN ('unreviewed', 'needs_review', 'approved', 'edited', 'rejected')",
+            )
         batch_op.add_column(sa.Column('original_text', sa.Text(), nullable=True))
         batch_op.add_column(sa.Column('reviewed_by', sa.String(length=64), nullable=True))
         batch_op.add_column(sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True))
@@ -55,7 +63,14 @@ def upgrade() -> None:
     review_checks = (
         sa.CheckConstraint("action IN ('approve', 'edit', 'reject', 'flag', 'answer')", name='check_review_action'),
     )
-    with op.batch_alter_table('review_events', schema=None, recreate='always', table_args=review_checks) as batch_op:
+    review_batch_kwargs = {"recreate": "always", "table_args": review_checks} if is_sqlite else {}
+    with op.batch_alter_table('review_events', schema=None, **review_batch_kwargs) as batch_op:
+        if not is_sqlite:
+            batch_op.drop_constraint('check_review_action', type_='check')
+            batch_op.create_check_constraint(
+                'check_review_action',
+                "action IN ('approve', 'edit', 'reject', 'flag', 'answer')",
+            )
         batch_op.add_column(sa.Column('note', sa.Text(), nullable=True))
         batch_op.add_column(sa.Column('resulting_review_status', sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column('resulting_verification_status', sa.String(length=32), nullable=True))
