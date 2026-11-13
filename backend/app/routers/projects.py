@@ -3,13 +3,20 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user
+from app.engine.clearance import (
+    ClearanceError,
+    can_view_contradiction,
+    filter_claims,
+    filter_sources,
+    resolve_viewer_profile,
+)
 from app.models import (
     Chunk,
     Claim,
@@ -282,21 +289,22 @@ def get_project_members(
 @router.get("/{project_id}/summary", response_model=ProjectSummaryResponse)
 def get_project_summary(
     project_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     project, membership = _get_scoped_project(project_id, current_user.id, db)
-    hide_restricted = membership.role in HIDDEN_ROLES
+    try:
+        viewer = resolve_viewer_profile(current_user.id, current_user.name, membership.role, view_as)
+    except ClearanceError as exc:
+        raise HTTPException(exc.status_code, str(exc))
 
-    src_q = db.query(Source).filter(Source.project_id == project_id)
-    if hide_restricted:
-        src_q = src_q.filter(Source.clearance_level != "restricted")
-    total_sources = src_q.count()
-
-    type_q = db.query(Source.type, func.count(Source.id)).filter(Source.project_id == project_id)
-    if hide_restricted:
-        type_q = type_q.filter(Source.clearance_level != "restricted")
-    type_counts = type_q.group_by(Source.type).all()
+    all_sources = db.query(Source).filter(Source.project_id == project_id).all()
+    vis_sources = filter_sources(viewer, all_sources)
+    total_sources = len(vis_sources)
+    sources_by_type: dict = {}
+    for s in vis_sources:
+        sources_by_type[s.type] = sources_by_type.get(s.type, 0) + 1
 
     member_count = (
         db.query(Membership)
@@ -304,27 +312,25 @@ def get_project_summary(
         .count()
     )
 
-    clm_q = db.query(Claim).filter(Claim.project_id == project_id)
-    if hide_restricted:
-        clm_q = clm_q.filter(Claim.clearance_level != "restricted")
-    claim_count = clm_q.count()
+    all_claims = db.query(Claim).filter(Claim.project_id == project_id).all()
+    vis_claims = filter_claims(db, viewer, all_claims)
+    claim_count = len(vis_claims)
+    claims_by_status: dict = {}
+    claims_by_type: dict = {}
+    reviewed_claim_count = 0
+    claims_needing_review_count = 0
+    for c in vis_claims:
+        claims_by_status[c.verification_status] = claims_by_status.get(c.verification_status, 0) + 1
+        claims_by_type[c.claim_type] = claims_by_type.get(c.claim_type, 0) + 1
+        if c.review_status in ("approved", "edited", "rejected"):
+            reviewed_claim_count += 1
+        if c.review_status in ("unreviewed", "needs_review", "edited"):
+            claims_needing_review_count += 1
 
-    status_q = db.query(Claim.verification_status, func.count(Claim.id)).filter(Claim.project_id == project_id)
-    if hide_restricted:
-        status_q = status_q.filter(Claim.clearance_level != "restricted")
-    claims_by_status = {st: cnt for st, cnt in status_q.group_by(Claim.verification_status).all()}
+    all_ctrs = db.query(Contradiction).filter(Contradiction.project_id == project_id, Contradiction.status == "open").all()
+    open_contradiction_count = sum(1 for ctr in all_ctrs if can_view_contradiction(viewer, ctr))
 
-    ctype_q = db.query(Claim.claim_type, func.count(Claim.id)).filter(Claim.project_id == project_id)
-    if hide_restricted:
-        ctype_q = ctype_q.filter(Claim.clearance_level != "restricted")
-    claims_by_type = {ct: cnt for ct, cnt in ctype_q.group_by(Claim.claim_type).all()}
-
-    cnt_q = db.query(Contradiction).filter(Contradiction.project_id == project_id, Contradiction.status == "open")
-    if hide_restricted:
-        cnt_q = cnt_q.filter(Contradiction.clearance_level != "restricted")
-    open_contradiction_count = cnt_q.count()
-
-    source_ids = [s.id for s in src_q.all()]
+    source_ids = [s.id for s in vis_sources]
     chunk_count = (
         db.query(Chunk).filter(Chunk.source_id.in_(source_ids)).count()
         if source_ids else 0
@@ -337,11 +343,8 @@ def get_project_summary(
         is not None
     )
 
-    reviewed_claim_count = clm_q.filter(Claim.review_status.in_(("approved", "edited", "rejected"))).count()
-    claims_needing_review_count = clm_q.filter(Claim.review_status.in_(("unreviewed", "needs_review", "edited"))).count()
-
     qn_q = db.query(InterviewQuestion).filter(InterviewQuestion.project_id == project_id)
-    if membership.role != "admin":
+    if viewer.profile != "team_lead":
         qn_q = qn_q.filter(InterviewQuestion.clearance_level != "restricted")
     total_question_count = qn_q.count()
     answered_question_count = qn_q.filter(InterviewQuestion.status == "answered").count()
@@ -353,7 +356,7 @@ def get_project_summary(
         is_synthetic=project.is_synthetic,
         analysed=analysed,
         source_count=total_sources,
-        sources_by_type={t: cnt for t, cnt in type_counts},
+        sources_by_type=sources_by_type,
         member_count=member_count,
         claim_count=claim_count,
         claims_by_status=claims_by_status,

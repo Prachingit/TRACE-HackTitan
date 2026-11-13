@@ -11,6 +11,15 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user
+from app.engine.clearance import (
+    ClearanceError,
+    ViewerContext,
+    can_view_claim,
+    filter_claims,
+    filter_evidence_for_viewer,
+    override_claim_clearance,
+    resolve_viewer_profile,
+)
 from app.engine.pipeline import create_run_record, run_analysis_background_job
 from app.engine.timeline import build_timeline
 from app.engine.types import HIDDEN_ROLES, module_name
@@ -175,7 +184,12 @@ def _serialize_run(run: Run) -> RunResponse:
     )
 
 
-def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) -> ClaimResponse | ClaimDetailResponse:
+def _serialize_claim(
+    clm: Claim,
+    db: Session,
+    include_evidence: bool = False,
+    viewer: Optional[ViewerContext] = None,
+) -> ClaimResponse | ClaimDetailResponse:
     attrs = {}
     if clm.attrs_json:
         try:
@@ -189,6 +203,8 @@ def _serialize_claim(clm: Claim, db: Session, include_evidence: bool = False) ->
         .order_by(ClaimEvidence.timestamp.asc().nullsfirst(), ClaimEvidence.id.asc())
         .all()
     )
+    if viewer is not None:
+        ev_rows = filter_evidence_for_viewer(db, viewer, ev_rows)
     primary_source_id = None
     primary_source_name = None
     primary_locator = None
@@ -349,11 +365,16 @@ def get_timeline_query(
 
 # â”€â”€ Modules Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-def _list_project_modules(project_id: str, role: str, db: Session) -> List[ModuleSummaryResponse]:
-    q = db.query(Claim).filter(Claim.project_id == project_id)
-    if role in HIDDEN_ROLES:
-        q = q.filter(Claim.clearance_level != "restricted")
-    claims = q.all()
+def _resolve_viewer(user: CurrentUser, role: str, view_as: Optional[str]) -> ViewerContext:
+    try:
+        return resolve_viewer_profile(user.id, user.name, role, view_as)
+    except ClearanceError as exc:
+        raise HTTPException(exc.status_code, str(exc))
+
+
+def _list_project_modules(project_id: str, viewer: ViewerContext, db: Session) -> List[ModuleSummaryResponse]:
+    all_claims = db.query(Claim).filter(Claim.project_id == project_id).all()
+    claims = filter_claims(db, viewer, all_claims)
 
     by_mod: Dict[str, List[Claim]] = {}
     for c in claims:
@@ -379,21 +400,25 @@ def _list_project_modules(project_id: str, role: str, db: Session) -> List[Modul
 @router.get("/api/projects/{project_id}/modules", response_model=List[ModuleSummaryResponse])
 def get_project_modules(
     project_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _, membership = _get_scoped_project(project_id, current_user.id, db)
-    return _list_project_modules(project_id, membership.role, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    return _list_project_modules(project_id, viewer, db)
 
 
 @router.get("/api/modules", response_model=List[ModuleSummaryResponse])
 def get_modules_query(
     project_id: str = Query(...),
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _, membership = _get_scoped_project(project_id, current_user.id, db)
-    return _list_project_modules(project_id, membership.role, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    return _list_project_modules(project_id, viewer, db)
 
 
 @router.post("/api/projects/{project_id}/modules/rename", response_model=List[ModuleSummaryResponse])
@@ -429,14 +454,15 @@ def rename_or_merge_module(
         c.module = dst_mod
 
     db.commit()
-    return _list_project_modules(project_id, membership.role, db)
+    viewer = _resolve_viewer(current_user, membership.role, None)
+    return _list_project_modules(project_id, viewer, db)
 
 
-# â”€â”€ Claims & Evidence Ledger Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Claims & Evidence Ledger Endpoints ────────────────────────────────────────
 
 def _query_project_claims(
     project_id: str,
-    role: str,
+    viewer: ViewerContext,
     db: Session,
     claim_type: Optional[str] = None,
     module: Optional[str] = None,
@@ -446,8 +472,6 @@ def _query_project_claims(
     q: Optional[str] = None,
 ) -> List[ClaimResponse]:
     query = db.query(Claim).filter(Claim.project_id == project_id)
-    if role in HIDDEN_ROLES:
-        query = query.filter(Claim.clearance_level != "restricted")
     if claim_type:
         query = query.filter(Claim.claim_type == claim_type)
     if module:
@@ -463,7 +487,8 @@ def _query_project_claims(
         query = query.filter(or_(Claim.title.ilike(pat), Claim.text.ilike(pat), Claim.module.ilike(pat)))
 
     rows = query.order_by(Claim.event_time.desc().nullslast(), Claim.id.asc()).all()
-    return [_serialize_claim(c, db, include_evidence=False) for c in rows]
+    visible_rows = filter_claims(db, viewer, rows)
+    return [_serialize_claim(c, db, include_evidence=False, viewer=viewer) for c in visible_rows]
 
 
 @router.get("/api/projects/{project_id}/claims", response_model=List[ClaimResponse])
@@ -475,12 +500,14 @@ def list_project_claims(
     owner: Optional[str] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _, membership = _get_scoped_project(project_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
     return _query_project_claims(
-        project_id, membership.role, db,
+        project_id, viewer, db,
         claim_type=type, module=module, verification_status=status,
         owner=owner, review_status=review_status, q=q,
     )
@@ -495,12 +522,14 @@ def list_claims_query(
     owner: Optional[str] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
     q: Optional[str] = Query(default=None),
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _, membership = _get_scoped_project(project_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
     return _query_project_claims(
-        project_id, membership.role, db,
+        project_id, viewer, db,
         claim_type=type, module=module, verification_status=status,
         owner=owner, review_status=review_status, q=q,
     )
@@ -509,6 +538,7 @@ def list_claims_query(
 @router.get("/api/claims/{claim_id}", response_model=ClaimDetailResponse)
 def get_claim_detail(
     claim_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -517,9 +547,37 @@ def get_claim_detail(
     if not clm:
         raise HTTPException(status_code=404, detail="Claim not found.")
     _, membership = _get_scoped_project(clm.project_id, current_user.id, db)
-    if membership.role in HIDDEN_ROLES and clm.clearance_level == "restricted":
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    if not can_view_claim(db, viewer, clm):
         raise HTTPException(status_code=404, detail="Claim not found.")
-    return _serialize_claim(clm, db, include_evidence=True)
+    return _serialize_claim(clm, db, include_evidence=True, viewer=viewer)
+
+
+class ClearanceOverrideRequest(BaseModel):
+    clearance_level: str
+    reason: str
+
+
+@router.post("/api/claims/{claim_id}/clearance", response_model=ClaimResponse)
+def set_claim_clearance(
+    claim_id: str,
+    body: ClearanceOverrideRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Admin-only: override a claim's effective clearance level with a recorded reason."""
+    clm = db.get(Claim, claim_id)
+    if not clm:
+        raise HTTPException(status_code=404, detail="Claim not found.")
+    _, membership = _get_scoped_project(clm.project_id, current_user.id, db)
+    if membership.role != "admin":
+        raise HTTPException(status_code=403, detail="Only workspace admins can override claim clearance.")
+    admin_user = db.get(User, current_user.id)
+    try:
+        updated = override_claim_clearance(db, clm, admin_user, body.clearance_level, body.reason)
+    except ClearanceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    return _serialize_claim(updated, db, include_evidence=False)
 
 
 @router.get("/api/projects/{project_id}/ledger/validation")

@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user
+from app.engine.clearance import (
+    ClearanceError,
+    can_view_contradiction,
+    resolve_viewer_profile,
+)
 from app.engine.types import HIDDEN_ROLES
 from app.models import (
     Claim,
@@ -153,13 +158,16 @@ def list_project_contradictions(
     rule_code: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     severity: Optional[str] = Query(default=None),
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _, membership = _get_scoped_project(project_id, current_user.id, db)
+    try:
+        viewer = resolve_viewer_profile(current_user.id, current_user.name, membership.role, view_as)
+    except ClearanceError as exc:
+        raise HTTPException(exc.status_code, str(exc))
     q = db.query(Contradiction).filter(Contradiction.project_id == project_id)
-    if membership.role in HIDDEN_ROLES:
-        q = q.filter(Contradiction.clearance_level != "restricted")
     if rule_code:
         q = q.filter(Contradiction.rule_code == rule_code)
     if status:
@@ -167,14 +175,16 @@ def list_project_contradictions(
     if severity:
         q = q.filter(Contradiction.severity == severity)
 
-    rows = q.all()
+    rows = [c for c in q.all() if can_view_contradiction(viewer, c)]
     rows.sort(key=lambda c: (0 if c.status == "open" else 1, SEVERITY_RANK.get(c.severity, 9), c.id))
-    return [_serialize_contradiction(c, membership.role, db, include_claims=False) for c in rows]
+    effective_role = "incoming" if viewer.profile == "incoming" else ("departing" if viewer.profile == "departing" else membership.role)
+    return [_serialize_contradiction(c, effective_role, db, include_claims=False) for c in rows]
 
 
 @router.get("/api/contradictions/{contradiction_id}", response_model=ContradictionDetailResponse)
 def get_contradiction_detail(
     contradiction_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -182,9 +192,14 @@ def get_contradiction_detail(
     if not ctr:
         raise HTTPException(status_code=404, detail="Contradiction not found.")
     _, membership = _get_scoped_project(ctr.project_id, current_user.id, db)
-    if membership.role in HIDDEN_ROLES and ctr.clearance_level == "restricted":
+    try:
+        viewer = resolve_viewer_profile(current_user.id, current_user.name, membership.role, view_as)
+    except ClearanceError as exc:
+        raise HTTPException(exc.status_code, str(exc))
+    if not can_view_contradiction(viewer, ctr):
         raise HTTPException(status_code=404, detail="Contradiction not found.")
-    return _serialize_contradiction(ctr, membership.role, db, include_claims=True)
+    effective_role = "incoming" if viewer.profile == "incoming" else ("departing" if viewer.profile == "departing" else membership.role)
+    return _serialize_contradiction(ctr, effective_role, db, include_claims=True)
 
 
 @router.post("/api/contradictions/{contradiction_id}/resolve", response_model=ContradictionDetailResponse)

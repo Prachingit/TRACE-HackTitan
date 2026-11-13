@@ -26,6 +26,13 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user
+from app.engine.clearance import (
+    ClearanceError,
+    can_view_source,
+    filter_chunks,
+    filter_sources,
+    resolve_viewer_profile,
+)
 from app.models import Chunk, Membership, Project, Source
 from app.services.background import parse_source, run_parse_job
 from app.services.github import (
@@ -162,10 +169,11 @@ def _next_source_id(project_id: str, db: Session) -> str:
     return new_source_id()
 
 
-def _apply_clearance_filter(query, role: str):
-    if role in ("incoming", "departing"):
-        query = query.filter(Source.clearance_level != "restricted")
-    return query
+def _resolve_viewer(user: CurrentUser, role: str, view_as: Optional[str]):
+    try:
+        return resolve_viewer_profile(user.id, user.name, role, view_as)
+    except ClearanceError as exc:
+        raise HTTPException(exc.status_code, str(exc))
 
 
 # ── List sources ──────────────────────────────────────────────────────────────
@@ -173,13 +181,19 @@ def _apply_clearance_filter(query, role: str):
 @router.get("/{project_id}/sources", response_model=List[SourceResponse])
 def list_sources(
     project_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     project, membership = _get_project_scoped(project_id, current_user.id, db)
-    q = db.query(Source).filter(Source.project_id == project_id)
-    q = _apply_clearance_filter(q, membership.role)
-    sources = q.order_by(Source.uploaded_at.desc()).all()
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    all_sources = (
+        db.query(Source)
+        .filter(Source.project_id == project_id)
+        .order_by(Source.uploaded_at.desc())
+        .all()
+    )
+    sources = filter_sources(viewer, all_sources)
     result = []
     for s in sources:
         chunk_count = db.query(Chunk).filter(Chunk.source_id == s.id).count()
@@ -206,14 +220,14 @@ def list_sources(
 def get_source(
     project_id: str,
     source_id: str,
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     project, membership = _get_project_scoped(project_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
     source = db.query(Source).filter(Source.project_id == project_id, Source.id == source_id).first()
-    if not source:
-        raise HTTPException(404, "Source not found.")
-    if source.clearance_level == "restricted" and membership.role in ("incoming", "departing"):
+    if not source or not can_view_source(viewer, source):
         raise HTTPException(404, "Source not found.")
     chunk_count = db.query(Chunk).filter(Chunk.source_id == source_id).count()
     return SourceResponse(
@@ -239,14 +253,14 @@ def get_chunks(
     source_id: str,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     project, membership = _get_project_scoped(project_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
     source = db.query(Source).filter(Source.project_id == project_id, Source.id == source_id).first()
-    if not source:
-        raise HTTPException(404, "Source not found.")
-    if source.clearance_level == "restricted" and membership.role in ("incoming", "departing"):
+    if not source or not can_view_source(viewer, source):
         raise HTTPException(404, "Source not found.")
     chunks = (
         db.query(Chunk)
@@ -256,7 +270,7 @@ def get_chunks(
         .limit(limit)
         .all()
     )
-    return [ChunkResponse.model_validate(c) for c in chunks]
+    return [ChunkResponse.model_validate(c) for c in filter_chunks(viewer, chunks, source)]
 
 
 # ── File upload ───────────────────────────────────────────────────────────────

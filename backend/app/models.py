@@ -223,6 +223,10 @@ class Claim(Base):
     reviewed_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_note = Column(Text, nullable=True)
+    # Phase 7 additions: admin clearance override with recorded reason
+    clearance_override_reason = Column(Text, nullable=True)
+    clearance_overridden_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    clearance_overridden_at = Column(DateTime(timezone=True), nullable=True)
 
     project = relationship("Project", back_populates="claims")
     owner = relationship("User", foreign_keys=[owner_id])
@@ -369,12 +373,23 @@ class Handover(Base):
     approved_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Phase 7 additions
+    readiness_score = Column(Float, nullable=True)
+    readiness_json = Column(Text, nullable=True)
+    snapshot_json = Column(Text, nullable=True)
+    shared_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    shared_at = Column(DateTime(timezone=True), nullable=True)
+    share_revoked_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
 
     project = relationship("Project", back_populates="handovers")
     departing_user = relationship("User", foreign_keys=[departing_user_id])
     incoming_user = relationship("User", foreign_keys=[incoming_user_id])
-    sections = relationship("HandoverSection", back_populates="handover", cascade="all, delete-orphan")
+    sections = relationship("HandoverSection", back_populates="handover", cascade="all, delete-orphan", order_by="HandoverSection.ordinal")
     onboarding_progress = relationship("OnboardingProgress", back_populates="handover", cascade="all, delete-orphan")
+    events = relationship("HandoverEvent", back_populates="handover", cascade="all, delete-orphan", order_by="HandoverEvent.timestamp")
 
 
 class HandoverSection(Base):
@@ -384,9 +399,36 @@ class HandoverSection(Base):
     handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
     section_key = Column(String(64), nullable=False)
     content_json = Column(Text, nullable=False)
-    review_status = Column(String(32), nullable=False, default="unreviewed")
+    review_status = Column(String(32), nullable=False, default="draft")
+    # Phase 7 additions
+    title = Column(String(255), nullable=True)
+    ordinal = Column(Integer, nullable=False, default=0, server_default="0")
+    approved_with_gaps = Column(Boolean, nullable=False, default=False, server_default="0")
+    gap_note = Column(Text, nullable=True)
+    reviewed_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
 
     handover = relationship("Handover", back_populates="sections")
+
+
+class HandoverEvent(Base):
+    """Append-only history for handover generation, section edits/approvals, sharing, and acknowledgement."""
+
+    __tablename__ = "handover_events"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String(48), nullable=False)
+    section_key = Column(String(64), nullable=True)
+    detail = Column(Text, nullable=True)
+    old_content_json = Column(Text, nullable=True)
+    new_content_json = Column(Text, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    handover = relationship("Handover", back_populates="events")
+    actor = relationship("User")
 
 
 class OnboardingProgress(Base):
@@ -396,7 +438,9 @@ class OnboardingProgress(Base):
     handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     section_key = Column(String(64), nullable=False)
+    item_key = Column(String(128), nullable=True)  # e.g. plan item ID or null for section-level
     understood = Column(Boolean, nullable=False, default=False)
+    note = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     handover = relationship("Handover", back_populates="onboarding_progress")
@@ -467,4 +511,9 @@ from sqlalchemy import event  # noqa: E402
 @event.listens_for(ReviewEvent, "before_update")
 def _review_events_are_append_only(mapper, connection, target):  # pragma: no cover - guard
     raise ValueError("ReviewEvent rows are append-only and cannot be modified.")
+
+
+@event.listens_for(HandoverEvent, "before_update")
+def _handover_events_are_append_only(mapper, connection, target):  # pragma: no cover - guard
+    raise ValueError("HandoverEvent rows are append-only and cannot be modified.")
 
