@@ -54,3 +54,33 @@ Clearance levels: `public`, `team`, `restricted`. Roles: `admin`, `team_member`,
 
 ## Chunk locators
 Markdown/TXT `L12-L20`; PDF `page:3`; DOCX `para:4-7` or `table:1:row:2`; CSV `row:5`; chat/generic JSON `idx:n`; commit JSON and GitHub `sha:...`, `pr:N`, `issue:N`; manual `manual`.
+
+## Reconstruction & Analysis (Phase 3)
+`Run` tracks 5 stages: `reading_sources`, `extracting`, `correlating`, `detecting_gaps`, `preparing`.
+Claims carry `id` (`CLM-...`), `claim_type` (`task_status`, `decision`, `ownership`, `blocker`, `dependency`, `contribution`, `testing`, `doc_gap`), `verification_status` (`verified`, `inferred`, `missing`, `conflicting`), `review_status` (`unreviewed`, `approved`, `edited`, `rejected`), `extractor` (`rule` or `llm`), `origin_label` (`human-reviewed`, `ai-extracted`, `rule-extracted`), and `clearance_level` (`public`, `team`, `restricted`).
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/projects/{id}/analyze` | 202. Starts background analysis run on parsed sources. Preserves human-reviewed claims and existing contradiction resolutions. |
+| GET | `/projects/{id}/runs/latest` | Latest `Run` with stages and summary counts, or `null` if never analysed. |
+| GET | `/projects/{id}/timeline` | Chronological events across clearance-visible sources. (Also `GET /timeline?project_id=...`). |
+| GET | `/projects/{id}/modules` | Correlated modules with claim counts and owners. (Also `GET /modules?project_id=...`). |
+| POST | `/projects/{id}/modules/rename` | `{from_module, to_module}`. Saves alias and updates claims. |
+
+## Evidence Ledger & Citation Validation (Phase 4)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/projects/{id}/claims` | Filters: `type`, `module`, `status`, `owner`, `review_status`, `q`. Clearance-filtered. (Also `GET /claims?project_id=...`). |
+| GET | `/claims/{claim_id}` | Full claim detail + `evidence[]` with `chunk_text`, `excerpt`, `highlight_start`, `highlight_end`. 404 if restricted for `incoming`/`departing` or cross-workspace. |
+| PATCH | `/claims/{claim_id}/review` | `{review_status, title?, text?, owner_name?, module?}`. Sets `origin_label` to `human-reviewed`. |
+| GET | `/projects/{id}/ledger/validation` | Verifies every `ClaimEvidence.excerpt` exists in `Chunk.text`. Downgrades `verified` claims with 0 valid citations to `missing`. |
+
+## Contradiction Radar (Phase 5)
+8 deterministic rules: `STATUS_WITHOUT_EVIDENCE`, `CONFLICTING_STATUS`, `CONFLICTING_OWNERSHIP`, `UNRESOLVED_DEPENDENCY`, `STALE_ACTIVITY`, `UNDOCUMENTED_WORK`, `UNASSIGNED_RESPONSIBILITY`, `MISSING_TEST_EVIDENCE`.
+Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`departing`). Re-running analysis never auto-resolves contradictions.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/projects/{id}/contradictions` | Filters: `rule_code`, `status`, `severity`. Sorted open-first, then high -> medium -> low. Clearance-filtered. |
+| GET | `/contradictions/{contradiction_id}` | Detail including `conflicting_sources[]` and full involved `claims[]` with highlighted evidence. 404 if restricted/cross-workspace. |
+| POST | `/contradictions/{contradiction_id}/resolve` | `{note}`. Requires non-empty note (400 otherwise). Marks `status="resolved"` with `resolved_by`, `resolved_at`, `resolution_note`. Does not silently flip claims to `verified`. |

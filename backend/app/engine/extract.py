@@ -400,7 +400,7 @@ _BLOCKER_PATTERNS = [
 ]
 
 _TESTING_PENDING_PATTERNS = [
-    re.compile(r"\b(?:testing remains[a-z ]*pending|testing is pending|testing pending|security review is still pending|outstanding test coverage|pending security validation|payment testing is dependent on|untested)\b", re.I),
+    re.compile(r"\b(?:testing remains[a-z ]*pending|testing is pending|testing pending|pending\s+test(?:ing|s)|security review is still pending|outstanding test coverage|pending security validation|payment testing is dependent on|untested)\b", re.I),
 ]
 
 _TESTING_PRESENT_PATTERNS = [
