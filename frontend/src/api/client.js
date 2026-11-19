@@ -20,24 +20,62 @@ function messageFrom(body, fallback) {
   return fallback;
 }
 
-async function request(path, { method = 'GET', json, form } = {}) {
-  const opts = { method, credentials: 'include', headers: {} };
+let _inflightSlow = 0;
+function _emitSlow(delta) {
+  _inflightSlow = Math.max(0, _inflightSlow + delta);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('trace:slow-request', { detail: { active: _inflightSlow > 0 } }));
+  }
+}
+
+async function request(path, { method = 'GET', json, form, timeoutMs = 65000 } = {}) {
+  const controller = new AbortController();
+  const opts = { method, credentials: 'include', headers: {}, signal: controller.signal };
   if (json !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(json);
   } else if (form) {
     opts.body = form;
   }
+
+  let markedSlow = false;
+  const slowTimer = setTimeout(() => {
+    markedSlow = true;
+    _emitSlow(1);
+  }, 3500);
+  const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+
   let res;
   try {
     res = await fetch(`${BASE_URL}${path}`, opts);
-  } catch {
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new ApiError('The server is taking longer than expected to wake up or respond. Please try again.', 408);
+    }
     throw new ApiError('Cannot reach the server. Check your connection and try again.', 0);
+  } finally {
+    clearTimeout(slowTimer);
+    clearTimeout(timeoutTimer);
+    if (markedSlow) _emitSlow(-1);
   }
+
   if (res.status === 204) return null;
   let body = null;
   try { body = await res.json(); } catch { /* no body */ }
-  if (!res.ok) throw new ApiError(messageFrom(body, `Request failed (${res.status}).`), res.status);
+
+  if (res.status === 401 && !path.startsWith('/api/auth/')) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('trace:session-expired'));
+    }
+    throw new ApiError('Your session expired. Please sign in again.', 401);
+  }
+  if (!res.ok) {
+    const rawMsg = messageFrom(body, `Request failed (${res.status}).`);
+    if (res.status === 403 && !rawMsg.toLowerCase().includes('role')) {
+      throw new ApiError(`Not available for your role. ${rawMsg}`, 403);
+    }
+    throw new ApiError(rawMsg, res.status);
+  }
   return body;
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   FolderKanban,
@@ -129,11 +129,26 @@ export function ProjectSubnav({ projectId }) {
   );
 }
 
+export function WakingServerBanner() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const handler = (e) => setSlow(Boolean(e.detail?.active));
+    window.addEventListener('trace:slow-request', handler);
+    return () => window.removeEventListener('trace:slow-request', handler);
+  }, []);
+  if (!slow) return null;
+  return (
+    <div className="alert info" role="status" style={{ marginBottom: 12 }}>
+      Waking up the server, this can take up to a minute...
+    </div>
+  );
+}
+
 export function ProtectedRoute() {
-  const { user, workspace, loading } = useAuth();
+  const { user, workspace, loading, sessionExpired } = useAuth();
   const loc = useLocation();
-  if (loading) return <div className="auth-wrap"><Loading /></div>;
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (loading) return <div className="auth-wrap"><WakingServerBanner /><Loading label="Checking session" /></div>;
+  if (!user) return <Navigate to={sessionExpired ? '/login?expired=1' : '/login'} replace state={{ from: loc.pathname }} />;
   if (!workspace && loc.pathname !== '/onboarding' && !loc.pathname.startsWith('/invite/')) {
     return <Navigate to="/onboarding" replace />;
   }
@@ -180,7 +195,7 @@ export function Layout() {
           <button className="btn sm" style={{ marginTop: 8 }} onClick={logout}><LogOut size={14} strokeWidth={1.5} />Sign out</button>
         </div>
       </aside>
-      <main className="main"><Outlet /></main>
+      <main className="main"><WakingServerBanner /><Outlet /></main>
     </div>
   );
 }

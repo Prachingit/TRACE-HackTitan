@@ -7,6 +7,7 @@ Tagline: 'When People Leave, Knowledge Shouldn't.'
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
+import time
 import traceback
 
 from fastapi import FastAPI, HTTPException, Request
@@ -27,19 +28,24 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Apply Alembic migrations (never drop/recreate tables)
+    # Apply Alembic migrations (never drop/recreate tables), retrying briefly if DB is waking up
     from alembic import command
     from alembic.config import Config
 
-    try:
-        cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
-        cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
-        command.upgrade(cfg, "head")
-    except Exception:
-        print("[TRACE Startup] Alembic migration failed:", file=sys.stdout, flush=True)
-        traceback.print_exc(file=sys.stdout)
-        sys.stdout.flush()
-        raise
+    cfg = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "alembic"))
+    max_attempts = 1 if settings.DATABASE_URL.startswith("sqlite") else 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            command.upgrade(cfg, "head")
+            break
+        except Exception:
+            print(f"[TRACE Startup] Alembic migration attempt {attempt}/{max_attempts} failed:", file=sys.stdout, flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            if attempt >= max_attempts:
+                raise
+            time.sleep(2)
 
     # Reset any sources stuck in 'parsing' from a previous crash & seed synthetic demo workspace
     db = SessionLocal()

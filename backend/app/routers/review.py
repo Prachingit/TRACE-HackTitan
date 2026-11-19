@@ -35,6 +35,7 @@ class ReviewRequest(BaseModel):
     text: Optional[str] = None
     note: Optional[str] = None
     resolve_contradictions: bool = False
+    expected_version: Optional[int] = None
 
 
 class ReviewActionResponse(ClaimDetailResponse):
@@ -120,6 +121,21 @@ def review_claim(
         raise HTTPException(status_code=403, detail="You do not have permission to perform this review action.")
     if role != "admin" and clm.clearance_level == "restricted":
         raise HTTPException(status_code=404, detail="Claim not found.")
+
+    if body.expected_version is not None:
+        from app.models import ReviewEvent
+        last_ev = (
+            db.query(ReviewEvent.version)
+            .filter(ReviewEvent.claim_id == clm.id)
+            .order_by(ReviewEvent.version.desc())
+            .first()
+        )
+        cur_ver = last_ev[0] if last_ev and last_ev[0] else 0
+        if body.expected_version != cur_ver:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This claim was already updated by another reviewer (expected v{body.expected_version}, current v{cur_ver}). Refresh to review the latest version.",
+            )
 
     try:
         result = apply_review(
