@@ -91,6 +91,7 @@ export function SourceDrawer({ claimId, projectId, onClose, onUpdated }) {
     try {
       const updated = await api.reviewClaim(claimId, {
         action,
+        expected_version: detail?.version,
         text: action === 'edit' ? editText : undefined,
         note: action === 'reject' ? rejectNote : undefined,
       });

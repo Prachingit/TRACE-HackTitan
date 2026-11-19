@@ -105,7 +105,11 @@ export function ReviewWorkbenchPage() {
     setBusy(true);
     setErr('');
     try {
-      const updated = await api.reviewClaim(selectedId, { action, ...extra });
+      const updated = await api.reviewClaim(selectedId, {
+        action,
+        expected_version: detail?.version,
+        ...extra,
+      });
       setDetail(updated);
       setEditText(updated.text);
       setMode('');

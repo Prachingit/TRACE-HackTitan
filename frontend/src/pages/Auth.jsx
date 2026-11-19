@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { WakingServerBanner } from '../components/ui';
 import api from '../api/client';
 
 function Shell({ title, children }) {
@@ -19,6 +20,7 @@ export function Login() {
   const { login, loginDemo } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
+  const expired = new URLSearchParams(loc.search).get('expired') === '1';
   const [f, setF] = useState({ email: '', password: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,15 @@ export function Login() {
 
   return (
     <div className="auth-wrap" style={{ alignItems: 'start', paddingTop: 32 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, width: '100%', maxWidth: 880 }}>
+      <div style={{ width: '100%', maxWidth: 880 }}>
+        <WakingServerBanner />
+        {expired && (
+          <div className="alert info" style={{ marginBottom: 12 }}>
+            Your session expired. Please sign in again.
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, width: '100%', maxWidth: 880 }}>
         <div className="card">
           <h1 className="auth-title">TRACE</h1>
           <p className="muted">When people leave, knowledge shouldn&apos;t. Sign in to your workspace.</p>

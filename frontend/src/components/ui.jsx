@@ -93,7 +93,7 @@ export function OriginBadge({ origin }) {
 export function StaleBadge({ isStale, possiblyAffected }) {
   if (isStale) {
     return (
-      <span className="badge bad">
+      <span className="badge bad" title="A source chunk cited by this claim changed or was removed. Review before relying on it.">
         <span className="badge-dot" />
         Stale
       </span>
@@ -101,7 +101,7 @@ export function StaleBadge({ isStale, possiblyAffected }) {
   }
   if (possiblyAffected) {
     return (
-      <span className="badge warn">
+      <span className="badge warn" title="New source content mentions this module. Check whether this claim needs an update.">
         <span className="badge-dot" />
         Possibly affected
       </span>

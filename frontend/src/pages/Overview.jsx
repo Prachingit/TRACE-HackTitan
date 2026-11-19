@@ -31,6 +31,20 @@ export function Overview() {
 
   const latestHandover = handovers[0] || null;
   const firstProjectId = rows && rows.length > 0 ? rows[0].p.id : null;
+  const firstSummary = rows && rows.length > 0 ? rows[0].s : null;
+
+  const step1Done = Boolean(firstSummary && firstSummary.source_count > 0);
+  const step2Done = Boolean(firstSummary && firstSummary.analysed);
+  const step3Done = Boolean(firstSummary && firstSummary.reviewed_claim_count > 0);
+  const step4Done = handovers.length > 0;
+  const step5Done = handovers.some((h) => h.status === 'shared' || h.status === 'acknowledged');
+  const gettingStarted = firstProjectId ? [
+    { label: '1. Add sources', done: step1Done, to: `/projects/${firstProjectId}` },
+    { label: '2. Analyze', done: step2Done, to: `/projects/${firstProjectId}/reconstruct` },
+    { label: '3. Review claims', done: step3Done, to: `/projects/${firstProjectId}/review` },
+    { label: '4. Generate handover', done: step4Done, to: `/projects/${firstProjectId}/handovers` },
+    { label: '5. Share with incoming', done: step5Done, to: `/projects/${firstProjectId}/handovers` },
+  ] : [];
 
   return (
     <>
@@ -44,6 +58,35 @@ export function Overview() {
           <Link className="btn" to="/handover-reports">Handover reports</Link>
         </div>
       </div>
+
+      {gettingStarted.length > 0 && (
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            <strong>Getting started</strong>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {gettingStarted.filter((s) => s.done).length} / {gettingStarted.length} completed
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {gettingStarted.map((st) => (
+              <Link
+                key={st.label}
+                to={st.to}
+                className="badge"
+                style={{
+                  padding: '6px 10px',
+                  textDecoration: 'none',
+                  borderColor: st.done ? 'var(--ok, #16a34a)' : 'var(--border)',
+                  background: st.done ? 'var(--ok-soft, #dcfce7)' : 'var(--bg)',
+                }}
+              >
+                <span className={`badge-dot`} style={{ background: st.done ? 'var(--ok, #16a34a)' : 'var(--muted)' }} />
+                {st.label}: {st.done ? 'Done' : 'Not done'}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {latestHandover && (
         <div className="panel" style={{ borderLeft: '3px solid var(--accent)', marginBottom: 16 }}>
