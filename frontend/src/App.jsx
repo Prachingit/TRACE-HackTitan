@@ -5,6 +5,7 @@ import { Layout, ProtectedRoute } from './components/ui';
 import { ForgotPassword, Login, Signup } from './pages/Auth';
 import { InviteAccept, Onboarding } from './pages/Workspace';
 import { CreateProject, ProjectList, ProjectSources, SourceDetail } from './pages/Projects';
+import { ChangesPage } from './pages/Changes';
 import { ActivityPage, KnowledgeBasePage, ReconstructPage } from './pages/Reconstruction';
 import { EvidenceLedgerPage } from './pages/Ledger';
 import { ContradictionRadarPage } from './pages/Contradictions';
@@ -36,6 +37,7 @@ export function App() {
               <Route path="projects" element={<ProjectList />} />
               <Route path="projects/new" element={<CreateProject />} />
               <Route path="projects/:id" element={<ProjectSources />} />
+              <Route path="projects/:id/changes" element={<ChangesPage />} />
               <Route path="projects/:id/sources/:sid" element={<SourceDetail />} />
               <Route path="projects/:id/reconstruct" element={<ReconstructPage />} />
               <Route path="projects/:id/activity" element={<ActivityPage />} />
@@ -45,6 +47,7 @@ export function App() {
               <Route path="projects/:id/interview" element={<ExitInterviewPage />} />
               <Route path="projects/:id/review" element={<ReviewWorkbenchPage />} />
               <Route path="projects/:id/handovers" element={<HandoverCenterPage />} />
+              <Route path="changes" element={<ChangesPage />} />
               <Route path="activity" element={<ActivityPage />} />
               <Route path="knowledge-base" element={<KnowledgeBasePage />} />
               <Route path="evidence" element={<EvidenceLedgerPage />} />

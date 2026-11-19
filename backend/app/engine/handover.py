@@ -19,6 +19,13 @@ from app.engine.clearance import (
     filter_handover_sections,
     max_clearance,
 )
+from app.engine.living import (
+    APPROVED_HANDOVER_STATUSES,
+    ImmutableHandoverError,
+    lineage_root_id,
+    lineage_versions,
+    open_draft_version,
+)
 from app.engine.plan import build_ranked_plan
 from app.models import (
     Claim,
@@ -119,6 +126,9 @@ def _claim_item(
         "verification_status": claim.verification_status,
         "review_status": claim.review_status,
         "clearance_level": claim.clearance_level,
+        "is_stale": bool(claim.is_stale),
+        "stale_reason": claim.stale_reason,
+        "possibly_affected": bool(claim.possibly_affected),
         "evidence": _evidence_refs(ev_rows, sources_by_id),
     }
     if extra:
@@ -259,6 +269,9 @@ def generate_handover(
     title: Optional[str] = None,
     period_label: Optional[str] = None,
     llm_caller: Optional[Callable[[str], str]] = None,
+    version_number: int = 1,
+    parent_handover_id: Optional[str] = None,
+    lineage_id: Optional[str] = None,
 ) -> Handover:
     """Assemble and persist a complete Handover draft with 10 structured sections."""
     claims_all = (
@@ -501,18 +514,25 @@ def generate_handover(
         departing_user_id=dep_uid,
         incoming_user_id=inc_uid,
         status="draft",
+        version_number=version_number,
+        parent_handover_id=parent_handover_id,
+        lineage_id=lineage_id,
         readiness_score=float(readiness["score"]),
         readiness_json=json.dumps(readiness),
         snapshot_json=json.dumps(
             {
                 "generated_at": _iso(_utcnow()),
                 "project_id": project.id,
+                "version_number": version_number,
                 "title": title or f"{project.name} Handover",
                 "period_label": period_label,
                 "approved_claims": [
                     {
                         "id": c.id,
                         "title": c.title or c.text[:90],
+                        "text": c.text,
+                        "module": c.module,
+                        "claim_type": c.claim_type,
                         "review_status": c.review_status,
                         "verification_status": c.verification_status,
                         "clearance_level": c.clearance_level,
@@ -525,6 +545,8 @@ def generate_handover(
     )
     db.add(handover)
     db.flush()
+    if handover.lineage_id is None:
+        handover.lineage_id = handover.id
 
     for idx, (sec_key, sec_title) in enumerate(SECTION_DEFS, start=1):
         summary_md, body_dict = sections_payload[sec_key]
@@ -565,6 +587,10 @@ def review_handover_section(
     approved_with_gaps: Optional[bool] = None,
     gap_note: Optional[str] = None,
 ) -> HandoverSection:
+    if handover.status in APPROVED_HANDOVER_STATUSES:
+        raise ImmutableHandoverError(
+            f"Handover v{handover.version_number or 1} is {handover.status} and immutable. Create a new version instead."
+        )
     sec = (
         db.query(HandoverSection)
         .filter(HandoverSection.handover_id == handover.id, HandoverSection.section_key == section_key)
@@ -625,6 +651,10 @@ def review_handover_section(
 
 
 def approve_handover(db: Session, handover: Handover, approver: User) -> Handover:
+    if handover.status in APPROVED_HANDOVER_STATUSES:
+        raise ImmutableHandoverError(
+            f"Handover v{handover.version_number or 1} is already {handover.status} and immutable."
+        )
     sections = (
         db.query(HandoverSection)
         .filter(HandoverSection.handover_id == handover.id)
@@ -731,6 +761,59 @@ def acknowledge_handover(db: Session, handover: Handover, incoming_user: User) -
     db.commit()
     db.refresh(handover)
     return handover
+
+
+def create_new_handover_version(
+    db: Session,
+    parent: Handover,
+    actor: User,
+    *,
+    title: Optional[str] = None,
+    period_label: Optional[str] = None,
+) -> Handover:
+    """Create a new draft handover version from current approved claims while leaving parent intact."""
+    existing_draft = open_draft_version(db, parent)
+    if existing_draft is not None:
+        return existing_draft
+
+    project = db.get(Project, parent.project_id)
+    if project is None:
+        raise ValueError("Project not found.")
+
+    root_id = lineage_root_id(parent)
+    if parent.lineage_id is None:
+        parent.lineage_id = root_id
+        db.flush()
+
+    versions = lineage_versions(db, parent)
+    next_num = max((v.version_number or 1) for v in versions) + 1
+    parent_snap = _parse_attrs(parent.snapshot_json)
+    new_h = generate_handover(
+        db,
+        project,
+        actor,
+        departing_user_id=parent.departing_user_id,
+        target_user_id=parent.incoming_user_id,
+        title=title or parent_snap.get("title") or f"{project.name} Handover",
+        period_label=period_label or parent_snap.get("period_label"),
+        version_number=next_num,
+        parent_handover_id=parent.id,
+        lineage_id=root_id,
+    )
+    record_handover_event(
+        db,
+        new_h.id,
+        actor,
+        "new_version_created",
+        detail={
+            "from_version_id": parent.id,
+            "from_version_number": parent.version_number or 1,
+            "version_number": next_num,
+        },
+    )
+    db.commit()
+    db.refresh(new_h)
+    return new_h
 
 
 def _pdf_safe(text: str) -> str:

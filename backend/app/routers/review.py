@@ -4,10 +4,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import CurrentUser, get_current_user
+from app.engine.living import stale_changes_for_claim
 from app.engine.review import (
     OPEN_REVIEW_STATUSES,
     ReviewError,
@@ -162,12 +164,20 @@ def review_queue(
     if role != "admin":
         q = q.filter(Claim.clearance_level != "restricted")
     if scope == "open":
-        q = q.filter(Claim.review_status.in_(OPEN_REVIEW_STATUSES))
+        q = q.filter(
+            or_(
+                Claim.review_status.in_(OPEN_REVIEW_STATUSES),
+                Claim.is_stale.is_(True),
+                Claim.possibly_affected.is_(True),
+            )
+        )
     if module:
         q = q.filter(Claim.module == module)
     rows = q.all()
     rows.sort(
         key=lambda c: (
+            0 if c.is_stale else 1,
+            0 if c.possibly_affected else 1,
             VERIFICATION_RANK.get(c.verification_status, 9),
             REVIEW_RANK.get(c.review_status, 5),
             c.module,
@@ -179,13 +189,16 @@ def review_queue(
     counts: Dict[str, int] = {}
     for c in rows:
         base = _serialize_claim(c, db, include_evidence=False)
-        reasons = accept_blockers(db, c) if c.review_status not in ("approved",) else []
+        reasons = accept_blockers(db, c) if (c.review_status != "approved" or c.is_stale or c.possibly_affected) else []
+        dumped = base.model_dump()
+        if c.is_stale:
+            dumped["stale_changes"] = stale_changes_for_claim(db, c, role == "admin")
         items.append(
             QueueItem(
-                **base.model_dump(),
+                **dumped,
                 open_contradiction_ids=_open_ctr_ids(db, c, role),
                 accept_blockers=reasons,
-                can_accept=(role == "admin" and not reasons and c.review_status != "approved"),
+                can_accept=(role == "admin" and not reasons and (c.review_status != "approved" or bool(c.is_stale) or bool(c.possibly_affected))),
             )
         )
         counts[c.verification_status] = counts.get(c.verification_status, 0) + 1

@@ -15,6 +15,7 @@ import {
   FileText,
   FileSpreadsheet,
   Compass,
+  GitCompare,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -88,11 +89,32 @@ export function OriginBadge({ origin }) {
   );
 }
 
+export function StaleBadge({ isStale, possiblyAffected }) {
+  if (isStale) {
+    return (
+      <span className="badge bad">
+        <span className="badge-dot" />
+        Stale
+      </span>
+    );
+  }
+  if (possiblyAffected) {
+    return (
+      <span className="badge warn">
+        <span className="badge-dot" />
+        Possibly affected
+      </span>
+    );
+  }
+  return null;
+}
+
 export function ProjectSubnav({ projectId }) {
   if (!projectId) return null;
   return (
     <nav className="subnav" aria-label="Project sections">
       <NavLink to={`/projects/${projectId}`} end>Sources</NavLink>
+      <NavLink to={`/projects/${projectId}/changes`}>Changes</NavLink>
       <NavLink to={`/projects/${projectId}/reconstruct`}>Reconstruct</NavLink>
       <NavLink to={`/projects/${projectId}/activity`}>Activity timeline</NavLink>
       <NavLink to={`/projects/${projectId}/knowledge`}>Knowledge base</NavLink>
@@ -134,6 +156,7 @@ export function Layout() {
             <NavLink to="/handovers"><FileText size={16} strokeWidth={1.5} />Handover center</NavLink>
             <NavLink to="/handover-reports"><FileSpreadsheet size={16} strokeWidth={1.5} />Handover reports</NavLink>
             <NavLink to="/projects"><FolderKanban size={16} strokeWidth={1.5} />Projects</NavLink>
+            <NavLink to="/changes"><GitCompare size={16} strokeWidth={1.5} />Changes</NavLink>
             <NavLink to="/activity"><Activity size={16} strokeWidth={1.5} />Activity</NavLink>
             <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
             <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>

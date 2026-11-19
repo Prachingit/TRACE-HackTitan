@@ -118,3 +118,15 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 | GET | `/auth/demo` | Returns synthetic demo account info and 5-step judge guide. |
 | POST | `/auth/demo` | `{role: "admin" \| "incoming" \| "departing"}`. Signs into the isolated synthetic demo workspace. |
 | GET | `/health` | Returns `status`, `version`, `db`, and `storage` health. |
+
+## Round 3, Improvement A: Living Handover
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/projects/{id}/changes` | Clearance-filtered source versions, chunk-level `SourceChange` rows (`added`/`removed`/`modified`), and stale/affected claims. Optional `?source_id=`. |
+| GET | `/sources/{id}/versions` | Immutable `SourceVersion` history with readable chunk snapshots (`SourceVersionChunk`) for diffs. Respects source clearance. |
+| PATCH | `/projects/{id}/sources/{source_id}/manual` | Updates a manual entry, creating a new `SourceVersion` and flagging affected claims (`409` if identical). |
+| GET | `/claims?project_id=&stale=true` | Filters claims by `stale=true\|false` (clearance-filtered). |
+| POST | `/handovers/{id}/new-version` | Admin only (403). Creates draft handover v2+ from current approved claims while leaving earlier approved versions intact (idempotent if a draft already exists). |
+| GET | `/handovers/{id}/versions` | Lists handover versions in the same lineage visible to the viewer (incoming sees approved/shared versions only). |
+| GET | `/handovers/{id}/diff?from=&to=` | Compares two handover versions in the same lineage (`added`, `removed`, `changed`, old vs new text, and cause), respecting viewer clearance. |

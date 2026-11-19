@@ -320,9 +320,11 @@ def _filter_section_content(content: Dict[str, Any], viewer: ViewerContext) -> D
         for item in filtered["items"]:
             if item.get("clearance_level") == "restricted":
                 continue
-            # Incoming never sees unreviewed or rejected claims as established facts
+            # Incoming never sees unreviewed, rejected, or stale claims as established facts
             rstatus = item.get("review_status")
             if rstatus and rstatus not in APPROVED_CLAIM_STATUSES and not item.get("is_gap_summary"):
+                continue
+            if item.get("is_stale") and not item.get("is_gap_summary"):
                 continue
             safe_items.append(item)
         filtered["items"] = safe_items

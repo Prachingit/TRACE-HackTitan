@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.engine.living import clear_stale_on_review
 from app.engine.validation import is_valid_excerpt
 from app.models import (
     Chunk,
@@ -213,6 +214,7 @@ def apply_review(
         claim.reviewed_by = user.id
         claim.reviewed_at = now
         claim.review_note = note
+        clear_stale_on_review(claim)
 
     elif act == "edit":
         new_text = (text or "").strip()
@@ -227,6 +229,7 @@ def apply_review(
         claim.reviewed_by = user.id
         claim.reviewed_at = now
         claim.review_note = note
+        clear_stale_on_review(claim)
         # The edited wording is no longer what the evidence literally says: it must be accepted again to be verified.
         if claim.verification_status == "verified":
             claim.verification_status = "inferred"
@@ -252,6 +255,7 @@ def apply_review(
         claim.reviewed_by = user.id
         claim.reviewed_at = now
         claim.review_note = note
+        clear_stale_on_review(claim)
 
     claim.updated_at = now
     record_event(db, claim, user.id, act, old_text, claim.text, note)

@@ -6,6 +6,7 @@ import {
   EmptyState,
   Loading,
   OriginBadge,
+  StaleBadge,
   VerificationBadge,
 } from '../components/ui';
 import { ProjectHeaderBar, useActiveProjectId } from './Reconstruction';
@@ -408,7 +409,10 @@ export function EvidenceLedgerPage() {
                     {c.primary_source_name || '-'}{' '}
                     {c.primary_locator ? `(${c.primary_locator})` : ''}
                   </td>
-                  <td><VerificationBadge status={c.verification_status} /></td>
+                  <td>
+                    <VerificationBadge status={c.verification_status} />{' '}
+                    <StaleBadge isStale={c.is_stale} possiblyAffected={c.possibly_affected} />
+                  </td>
                   <td><OriginBadge origin={c.origin_label} /></td>
                   <td><span className="badge">{c.review_status}</span></td>
                 </tr>

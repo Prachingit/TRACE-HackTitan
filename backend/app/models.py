@@ -19,6 +19,8 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -128,6 +130,10 @@ class Source(Base):
     project = relationship("Project", back_populates="sources")
     chunks = relationship("Chunk", back_populates="source", cascade="all, delete-orphan")
     evidences = relationship("ClaimEvidence", back_populates="source", cascade="all, delete-orphan")
+    versions = relationship(
+        "SourceVersion", back_populates="source", cascade="all, delete-orphan", order_by="SourceVersion.version_number"
+    )
+    changes = relationship("SourceChange", back_populates="source", cascade="all, delete-orphan")
 
 
 class Invite(Base):
@@ -227,6 +233,13 @@ class Claim(Base):
     clearance_override_reason = Column(Text, nullable=True)
     clearance_overridden_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     clearance_overridden_at = Column(DateTime(timezone=True), nullable=True)
+    # Round 3 (Living Handover): staleness is a flag separate from verification/review status.
+    is_stale = Column(Boolean, nullable=False, default=False, server_default=false())
+    stale_reason = Column(Text, nullable=True)
+    stale_change_ids = Column(Text, nullable=True)  # JSON list of SourceChange ids
+    stale_since = Column(DateTime(timezone=True), nullable=True)
+    possibly_affected = Column(Boolean, nullable=False, default=False, server_default=false())
+    affected_reason = Column(Text, nullable=True)
 
     project = relationship("Project", back_populates="claims")
     owner = relationship("User", foreign_keys=[owner_id])
@@ -383,6 +396,10 @@ class Handover(Base):
     acknowledged_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=True)
+    # Round 3 (Living Handover): version lineage. lineage_id is the id of v1 (null on legacy rows = own id).
+    version_number = Column(Integer, nullable=False, default=1, server_default="1")
+    parent_handover_id = Column(String(64), nullable=True, index=True)
+    lineage_id = Column(String(64), nullable=True, index=True)
 
     project = relationship("Project", back_populates="handovers")
     departing_user = relationship("User", foreign_keys=[departing_user_id])
@@ -501,6 +518,71 @@ class ModuleAlias(Base):
     project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     alias = Column(String(128), nullable=False)
     target = Column(String(128), nullable=False)
+
+
+class SourceVersion(Base):
+    """One immutable version of a Source (Round 3, Living Handover)."""
+
+    __tablename__ = "source_versions"
+    __table_args__ = (UniqueConstraint("source_id", "version_number", name="uq_source_version_number"),)
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False)
+    content_hash = Column(String(128), nullable=True)
+    status = Column(String(16), nullable=False, default="pending", server_default="pending")  # pending|applied|failed
+    origin = Column(String(32), nullable=True)  # initial | baseline | reupload | github_resync | manual_edit
+    file_path = Column(String(512), nullable=True)
+    uploaded_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    chunk_count = Column(Integer, nullable=False, default=0, server_default="0")
+    added_count = Column(Integer, nullable=False, default=0, server_default="0")
+    removed_count = Column(Integer, nullable=False, default=0, server_default="0")
+    modified_count = Column(Integer, nullable=False, default=0, server_default="0")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    source = relationship("Source", back_populates="versions")
+    snapshot_chunks = relationship(
+        "SourceVersionChunk", back_populates="version", cascade="all, delete-orphan", order_by="SourceVersionChunk.ordinal"
+    )
+
+
+class SourceVersionChunk(Base):
+    """Read-only chunk snapshot for a SourceVersion, kept so old versions stay readable for diffs."""
+
+    __tablename__ = "source_version_chunks"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    version_id = Column(String(64), ForeignKey("source_versions.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_id = Column(String(64), nullable=True, index=True)  # live Chunk id at snapshot time (may later be deleted)
+    ordinal = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    locator = Column(String(255), nullable=True)
+    author = Column(String(128), nullable=True)
+    timestamp = Column(DateTime(timezone=True), nullable=True)
+
+    version = relationship("SourceVersion", back_populates="snapshot_chunks")
+
+
+class SourceChange(Base):
+    """One deterministic chunk-level change between two versions of a source."""
+
+    __tablename__ = "source_changes"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(String(64), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_version_id = Column(String(64), ForeignKey("source_versions.id", ondelete="CASCADE"), nullable=True, index=True)
+    to_version_id = Column(String(64), ForeignKey("source_versions.id", ondelete="CASCADE"), nullable=False, index=True)
+    change_type = Column(String(16), nullable=False)  # added | removed | modified
+    old_snapshot_chunk_id = Column(String(64), nullable=True)
+    new_snapshot_chunk_id = Column(String(64), nullable=True)
+    chunk_id = Column(String(64), nullable=True, index=True)  # live chunk id (old id for removed/modified)
+    similarity = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    source = relationship("Source", back_populates="changes")
 
 
 

@@ -178,6 +178,8 @@ def execute_run(
             .all()
         }
         reviewed_fingerprints = set()
+        stale_by_chunk: Dict[str, List[str]] = {}
+        stale_by_mod_type: Dict[tuple, List[str]] = {}
         for ec in existing_claims:
             keep = (
                 ec.review_status != "unreviewed"
@@ -187,6 +189,11 @@ def execute_run(
             if keep:
                 if ec.fingerprint:
                     reviewed_fingerprints.add(ec.fingerprint)
+                if ec.is_stale:
+                    stale_by_mod_type.setdefault((ec.module, ec.claim_type), []).append(ec.id)
+                    for ev in db.query(ClaimEvidence).filter(ClaimEvidence.claim_id == ec.id).all():
+                        if ev.chunk_id:
+                            stale_by_chunk.setdefault(ev.chunk_id, []).append(ec.id)
             else:
                 db.delete(ec)
         db.flush()
@@ -207,6 +214,20 @@ def execute_run(
 
             if not valid_ev:
                 continue
+
+            # Record any stale reviewed claims that this new candidate updates/supersedes
+            supersedes: List[str] = []
+            for ch, _ in valid_ev:
+                for sid in stale_by_chunk.get(ch.id, []):
+                    if sid not in supersedes:
+                        supersedes.append(sid)
+            if not supersedes:
+                for sid in stale_by_mod_type.get((rc.module or "general", rc.type), []):
+                    if sid not in supersedes:
+                        supersedes.append(sid)
+            attrs_dict = dict(rc.attrs or {})
+            if supersedes:
+                attrs_dict["supersedes"] = supersedes
 
             cl_level = max_clearance(ch.clearance for ch, _ in valid_ev)
             owner_uid = _resolve_owner_user_id(db, project.workspace_id, rc.owner)
@@ -230,7 +251,7 @@ def execute_run(
                 task_key=rc.task_key,
                 fingerprint=fp,
                 run_id=run.id,
-                attrs_json=json.dumps(rc.attrs),
+                attrs_json=json.dumps(attrs_dict),
             )
             db.add(clm)
             db.flush()

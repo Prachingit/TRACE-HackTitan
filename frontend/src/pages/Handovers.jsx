@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../hooks/useAuth';
-import { EmptyState, Loading, ProjectSubnav, StatusBadge, VerificationBadge } from '../components/ui';
+import { EmptyState, Loading, ProjectSubnav, StaleBadge, StatusBadge, VerificationBadge } from '../components/ui';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -85,7 +85,10 @@ function SectionItemsTable({ items = [] }) {
                 )}
               </td>
               <td>{it.module || '—'}</td>
-              <td><VerificationBadge status={it.verification_status} /></td>
+              <td>
+                <VerificationBadge status={it.verification_status} />{' '}
+                <StaleBadge isStale={it.is_stale} possiblyAffected={it.possibly_affected} />
+              </td>
               <td>
                 <div className="mono" style={{ fontSize: 12 }}>
                   {(it.claim_ids || [it.claim_id]).filter(Boolean).join(', ')}
@@ -115,6 +118,11 @@ export function HandoverCenterPage() {
   const [handovers, setHandovers] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState(null);
+  const [versions, setVersions] = useState([]);
+  const [showDiff, setShowDiff] = useState(false);
+  const [diffFrom, setDiffFrom] = useState('');
+  const [diffTo, setDiffTo] = useState('');
+  const [diffData, setDiffData] = useState(null);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -175,11 +183,18 @@ export function HandoverCenterPage() {
       if (list.length > 0) {
         const keep = list.some((h) => h.id === selectedId) ? selectedId : list[0].id;
         setSelectedId(keep);
-        const d = await api.handoverDetail(keep, filters);
+        const [d, vs] = await Promise.all([
+          api.handoverDetail(keep, filters),
+          api.handoverVersions(keep, filters).catch(() => []),
+        ]);
         setDetail(d);
+        setVersions(vs || []);
+        setShowDiff(false);
+        setDiffData(null);
       } else {
         setSelectedId('');
         setDetail(null);
+        setVersions([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to load handovers.');
@@ -192,14 +207,61 @@ export function HandoverCenterPage() {
 
   async function selectHandover(hid) {
     setSelectedId(hid);
+    setShowDiff(false);
+    setDiffData(null);
     try {
       const filters = viewAs ? { view_as: viewAs } : {};
-      setDetail(await api.handoverDetail(hid, filters));
+      const [d, vs] = await Promise.all([
+        api.handoverDetail(hid, filters),
+        api.handoverVersions(hid, filters).catch(() => []),
+      ]);
+      setDetail(d);
+      setVersions(vs || []);
       if (showHistory) {
         setHistory(await api.handoverHistory(hid));
       }
     } catch (err) {
       setError(err.message || 'Failed to load handover detail.');
+    }
+  }
+
+  async function onCreateNewVersion() {
+    if (!detail) return;
+    setBusy(true);
+    setError('');
+    try {
+      const created = await api.createHandoverVersion(detail.id, {});
+      setSelectedId(created.id);
+      setDetail(created);
+      await loadHandovers();
+    } catch (err) {
+      setError(err.message || 'Failed to create new handover version.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDiff(fromId, toId) {
+    if (!detail) return;
+    try {
+      const filters = viewAs ? { view_as: viewAs } : {};
+      const res = await api.handoverDiff(detail.id, fromId, toId, filters);
+      setDiffData(res);
+    } catch (err) {
+      setError(err.message || 'Failed to load version diff.');
+    }
+  }
+
+  async function toggleDiff() {
+    if (!detail) return;
+    const next = !showDiff;
+    setShowDiff(next);
+    if (next && versions.length >= 2) {
+      const f = diffFrom || versions[0].id;
+      const t = diffTo || versions[versions.length - 1].id;
+      setDiffFrom(f);
+      setDiffTo(t);
+      await loadDiff(f, t);
     }
   }
 
@@ -397,7 +459,7 @@ export function HandoverCenterPage() {
           <div className="panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h2 style={{ margin: 0 }}>{detail.title}</h2>
+                <h2 style={{ margin: 0 }}>{detail.title} <span className="badge">v{detail.version_number || 1}</span></h2>
                 <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
                   <span className="mono">{detail.id}</span>
                   {' · '}Departing: {detail.departing_user_name || 'Project-wide'}
@@ -406,6 +468,25 @@ export function HandoverCenterPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {versions.length > 1 && (
+                  <select
+                    className="input"
+                    aria-label="Handover version"
+                    value={detail.id}
+                    onChange={(e) => selectHandover(e.target.value)}
+                  >
+                    {versions.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        v{v.version_number || 1} ({v.status})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {versions.length > 1 && (
+                  <button className="btn sm" onClick={toggleDiff}>
+                    {showDiff ? 'Hide diff' : 'Compare versions'}
+                  </button>
+                )}
                 <StatusBadge status={detail.status} />
                 <a
                   className="btn sm"
@@ -468,6 +549,78 @@ export function HandoverCenterPage() {
             )}
           </div>
 
+          {isAdmin && !isPreview && detail.freshness?.out_of_date && (
+            <div className="alert error" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <strong>Handover v{detail.version_number || 1} is out of date</strong>
+                <div style={{ fontSize: 13, marginTop: 4 }}>
+                  {(detail.freshness.reasons || []).join(' ')}
+                </div>
+              </div>
+              {detail.open_draft_version_id ? (
+                <button className="btn sm primary" onClick={() => selectHandover(detail.open_draft_version_id)}>
+                  Open draft version
+                </button>
+              ) : (
+                <button className="btn sm primary" onClick={onCreateNewVersion} disabled={busy}>
+                  {busy ? 'Creating...' : `Create v${(detail.version_number || 1) + 1}`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {showDiff && versions.length > 1 && (
+            <div className="panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                <h3 style={{ margin: 0 }}>Version diff</h3>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select className="input" value={diffFrom} onChange={(e) => { setDiffFrom(e.target.value); loadDiff(e.target.value, diffTo); }}>
+                    {versions.map((v) => <option key={v.id} value={v.id}>From v{v.version_number || 1} ({v.status})</option>)}
+                  </select>
+                  <select className="input" value={diffTo} onChange={(e) => { setDiffTo(e.target.value); loadDiff(diffFrom, e.target.value); }}>
+                    {versions.map((v) => <option key={v.id} value={v.id}>To v{v.version_number || 1} ({v.status})</option>)}
+                  </select>
+                </div>
+              </div>
+              {diffData && (
+                <div>
+                  <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+                    Added: {diffData.counts?.added || 0} · Removed: {diffData.counts?.removed || 0} · Changed: {diffData.counts?.changed || 0}
+                  </div>
+                  {[...(diffData.added || []), ...(diffData.changed || []), ...(diffData.removed || [])].length === 0 ? (
+                    <p className="muted" style={{ margin: 0 }}>No approved-claim differences between these two versions.</p>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Change</th>
+                            <th>Claim</th>
+                            <th>Old vs New</th>
+                            <th>Cause</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...(diffData.added || []), ...(diffData.changed || []), ...(diffData.removed || [])].map((row, i) => (
+                            <tr key={`${row.claim_id || row.old_claim_id}-${i}`}>
+                              <td><span className={`badge ${row.change === 'added' ? 'ok' : row.change === 'removed' ? 'bad' : 'warn'}`}>{row.change}</span></td>
+                              <td className="mono" style={{ fontSize: 12 }}>{row.claim_id}</td>
+                              <td style={{ fontSize: 12 }}>
+                                {row.old_text && <div className="diff-del" style={{ padding: 4, marginBottom: 4 }}>{row.old_text}</div>}
+                                {row.new_text && <div className="diff-ins" style={{ padding: 4 }}>{row.new_text}</div>}
+                              </td>
+                              <td style={{ fontSize: 12 }}>{row.cause?.label || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {showHistory && (
             <div className="panel">
               <h3 style={{ marginTop: 0 }}>Handover history (append-only)</h3>
@@ -520,7 +673,7 @@ export function HandoverCenterPage() {
                     {sec.approved_with_gaps && sec.gap_note && (
                       <span className="badge warn">Gap noted: {sec.gap_note}</span>
                     )}
-                    {isAdmin && !isPreview && (
+                    {isAdmin && !isPreview && !['approved', 'shared', 'acknowledged'].includes(detail.status) && (
                       <>
                         <button
                           className="btn sm"
@@ -704,6 +857,7 @@ export function HandoverReportsPage() {
               <tr>
                 <th>ID</th>
                 <th>Project</th>
+                <th>Ver</th>
                 <th>Status</th>
                 <th>Readiness</th>
                 <th>Recipient</th>
@@ -717,6 +871,7 @@ export function HandoverReportsPage() {
                 <tr key={h.id}>
                   <td className="mono">{h.id.slice(0, 8)}</td>
                   <td>{h.project_name || h.project_id}</td>
+                  <td className="mono">v{h.version_number || 1}</td>
                   <td><StatusBadge status={h.status} /></td>
                   <td>{Math.round(h.readiness_score || 0)}/100</td>
                   <td>{h.target_user_name || '—'}</td>

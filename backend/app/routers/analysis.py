@@ -117,6 +117,13 @@ class ClaimResponse(BaseModel):
     reviewed_at: Optional[datetime] = None
     review_note: Optional[str] = None
     version: int = 0
+    is_stale: bool = False
+    stale_reason: Optional[str] = None
+    stale_change_ids: List[str] = []
+    stale_since: Optional[datetime] = None
+    possibly_affected: bool = False
+    affected_reason: Optional[str] = None
+    stale_changes: List[Dict[str, Any]] = []
 
 
 class ClaimDetailResponse(ClaimResponse):
@@ -227,6 +234,12 @@ def _serialize_claim(
         .first()
     )
 
+    from app.engine.living import _json_list, stale_changes_for_claim
+
+    can_see_restricted = viewer.can_see_restricted if viewer is not None else True
+    stale_cids = _json_list(clm.stale_change_ids)
+    stale_chgs = stale_changes_for_claim(db, clm, can_see_restricted) if (include_evidence and clm.is_stale) else []
+
     base_kwargs = dict(
         id=clm.id,
         project_id=clm.project_id,
@@ -258,6 +271,13 @@ def _serialize_claim(
         reviewed_at=clm.reviewed_at,
         review_note=clm.review_note,
         version=(last_ev[0] if last_ev and last_ev[0] else 0),
+        is_stale=bool(clm.is_stale),
+        stale_reason=clm.stale_reason,
+        stale_change_ids=stale_cids,
+        stale_since=clm.stale_since,
+        possibly_affected=bool(clm.possibly_affected),
+        affected_reason=clm.affected_reason,
+        stale_changes=stale_chgs,
     )
 
     if not include_evidence:
@@ -471,6 +491,7 @@ def _query_project_claims(
     verification_status: Optional[str] = None,
     owner: Optional[str] = None,
     review_status: Optional[str] = None,
+    stale: Optional[bool] = None,
     q: Optional[str] = None,
 ) -> List[ClaimResponse]:
     query = db.query(Claim).filter(Claim.project_id == project_id)
@@ -484,6 +505,10 @@ def _query_project_claims(
         query = query.filter(Claim.owner_name.ilike(f"%{owner.strip()}%"))
     if review_status:
         query = query.filter(Claim.review_status == review_status)
+    if stale is True:
+        query = query.filter(Claim.is_stale.is_(True))
+    elif stale is False:
+        query = query.filter(Claim.is_stale.is_(False))
     if q and q.strip():
         pat = f"%{q.strip()}%"
         query = query.filter(or_(Claim.title.ilike(pat), Claim.text.ilike(pat), Claim.module.ilike(pat)))
@@ -501,6 +526,7 @@ def list_project_claims(
     status: Optional[str] = Query(default=None),
     owner: Optional[str] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
+    stale: Optional[bool] = Query(default=None),
     q: Optional[str] = Query(default=None),
     view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
@@ -511,7 +537,7 @@ def list_project_claims(
     return _query_project_claims(
         project_id, viewer, db,
         claim_type=type, module=module, verification_status=status,
-        owner=owner, review_status=review_status, q=q,
+        owner=owner, review_status=review_status, stale=stale, q=q,
     )
 
 
@@ -523,6 +549,7 @@ def list_claims_query(
     status: Optional[str] = Query(default=None),
     owner: Optional[str] = Query(default=None),
     review_status: Optional[str] = Query(default=None),
+    stale: Optional[bool] = Query(default=None),
     q: Optional[str] = Query(default=None),
     view_as: Optional[str] = Query(default=None),
     current_user: CurrentUser = Depends(get_current_user),
@@ -533,7 +560,7 @@ def list_claims_query(
     return _query_project_claims(
         project_id, viewer, db,
         claim_type=type, module=module, verification_status=status,
-        owner=owner, review_status=review_status, q=q,
+        owner=owner, review_status=review_status, stale=stale, q=q,
     )
 
 

@@ -151,6 +151,26 @@ export function IncomingPortalPage() {
 
       {error && <div className="panel error">{error}</div>}
 
+      {detail.newer_approved_version && (
+        <div className="alert info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <strong>Newer approved handover available (v{detail.newer_approved_version.version_number})</strong>
+            <span className="muted"> — You are viewing v{detail.version_number || 1}.</span>
+          </div>
+          <button
+            className="btn sm primary"
+            type="button"
+            onClick={() => {
+              const nid = detail.newer_approved_version.id;
+              setSelectedId(nid);
+              loadDetail(nid);
+            }}
+          >
+            Open v{detail.newer_approved_version.version_number}
+          </button>
+        </div>
+      )}
+
       {/* Hero: Where should I start? */}
       <div className="panel" style={{ borderLeft: '3px solid var(--accent)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>

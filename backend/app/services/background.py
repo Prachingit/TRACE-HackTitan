@@ -8,6 +8,13 @@ from typing import List, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.engine.living import (
+    apply_version,
+    latest_version,
+    pending_version,
+    record_initial_version,
+    utcnow,
+)
 from app.models import Chunk, Source
 from app.parsers import csv_parser, docx_parser, json_parser, pdf_parser, text_md
 
@@ -16,11 +23,15 @@ def parse_source(source_id: str, db: Session) -> None:
     """
     Parse a source identified by source_id.
     Sets status to 'parsing' at start, 'parsed' on success, 'failed' on error.
-    Idempotent: re-running clears existing chunks and re-parses.
+    Idempotent: re-running clears existing chunks on initial parse, or applies a pending SourceVersion
+    with chunk-level diffing and stale-claim flagging.
     """
     source = db.get(Source, source_id)
     if not source:
         return
+
+    pending = pending_version(db, source_id)
+    has_applied = latest_version(db, source_id) is not None
 
     # Mark as parsing
     source.status = "parsing"
@@ -28,25 +39,44 @@ def parse_source(source_id: str, db: Session) -> None:
     db.commit()
 
     try:
-        # Delete existing chunks (idempotent retry)
-        db.query(Chunk).filter(Chunk.source_id == source_id).delete()
-        db.flush()
-
-        file_path = source.file_path
+        file_path = (pending.file_path if pending and pending.file_path else source.file_path)
         if not file_path or not Path(file_path).exists():
             raise FileNotFoundError(
                 f"Uploaded file is no longer on disk (ephemeral storage was reset): {file_path}. Please re-upload the file."
             )
 
         raw_chunks = _dispatch(source.type, file_path)
-        _persist_chunks(source_id, raw_chunks, db)
+
+        if pending is not None:
+            apply_version(db, source, pending, raw_chunks)
+            source.file_path = file_path
+            if pending.content_hash:
+                source.content_hash = pending.content_hash
+            source.uploaded_at = utcnow()
+        else:
+            # Delete existing chunks (idempotent retry on initial parse)
+            db.query(Chunk).filter(Chunk.source_id == source_id).delete()
+            db.flush()
+            _persist_chunks(source_id, raw_chunks, db)
+            db.flush()
+            record_initial_version(
+                db, source, origin="initial", content_hash=source.content_hash
+            )
 
         source.status = "parsed"
         source.error_message = None
 
     except Exception as exc:
-        source.status = "failed"
-        source.error_message = str(exc)[:2000]
+        if pending is not None:
+            pending.status = "failed"
+            pending.error_message = str(exc)[:2000]
+        if pending is not None and has_applied:
+            # Keep previous parsed version intact so existing chunks/claims stay readable
+            source.status = "parsed"
+            source.error_message = f"Latest version failed: {str(exc)[:1800]}"
+        else:
+            source.status = "failed"
+            source.error_message = str(exc)[:2000]
 
     db.commit()
 

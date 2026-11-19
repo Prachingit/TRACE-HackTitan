@@ -22,11 +22,21 @@ from app.engine.clearance import (
 from app.engine.handover import (
     acknowledge_handover,
     approve_handover,
+    create_new_handover_version,
     generate_handover,
     render_handover_pdf,
     review_handover_section,
     revoke_handover_share,
     share_handover,
+)
+from app.engine.living import (
+    ImmutableHandoverError,
+    diff_handovers,
+    handover_freshness,
+    lineage_root_id,
+    lineage_versions,
+    newer_approved_version,
+    open_draft_version,
 )
 from app.models import (
     Handover,
@@ -121,11 +131,33 @@ def _serialize_handover(
         "acknowledged_at": h.acknowledged_at.isoformat() if h.acknowledged_at else None,
         "created_at": h.created_at.isoformat() if h.created_at else None,
         "updated_at": h.updated_at.isoformat() if h.updated_at else None,
+        "version_number": h.version_number or 1,
+        "parent_handover_id": h.parent_handover_id,
+        "lineage_id": lineage_root_id(h),
         "viewer_profile": viewer.profile,
         "is_preview": viewer.is_preview,
     }
-    if viewer.profile == "team_lead" and snap_obj:
-        payload["snapshot_json"] = snap_obj
+    if viewer.profile == "team_lead":
+        if snap_obj:
+            payload["snapshot_json"] = snap_obj
+        payload["freshness"] = handover_freshness(db, h)
+        draft_v = open_draft_version(db, h)
+        payload["open_draft_version_id"] = draft_v.id if draft_v else None
+    elif viewer.profile == "incoming":
+        newer_list = [
+            v
+            for v in lineage_versions(db, h)
+            if (v.version_number or 1) > (h.version_number or 1) and can_view_handover(viewer, v)
+        ]
+        if newer_list:
+            nv = newer_list[-1]
+            nv_snap = _parse_json_obj(nv.snapshot_json)
+            payload["newer_approved_version"] = {
+                "id": nv.id,
+                "version_number": nv.version_number or 1,
+                "title": nv_snap.get("title") or payload["title"],
+                "approved_at": nv.approved_at.isoformat() if nv.approved_at else None,
+            }
 
     if include_sections:
         sections = (
@@ -290,6 +322,8 @@ def patch_handover_section(
             approved_with_gaps=body.approved_with_gaps,
             gap_note=body.gap_note,
         )
+    except ImmutableHandoverError as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     sec_body = _parse_json_obj(sec.content_json)
@@ -322,6 +356,8 @@ def approve_handover_endpoint(
     approver = db.get(User, current_user.id)
     try:
         updated = approve_handover(db, handover, approver)
+    except ImmutableHandoverError as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     viewer = _resolve_viewer(current_user, membership.role, None)
@@ -516,3 +552,91 @@ def upsert_onboarding_progress(
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "note": row.note,
     }
+
+
+# ── Living Handover: Versions & Diffs ─────────────────────────────────────────
+
+class NewVersionRequest(BaseModel):
+    title: Optional[str] = None
+    period_label: Optional[str] = None
+
+
+@router.post("/api/handovers/{handover_id}/new-version", status_code=201)
+def create_handover_new_version(
+    handover_id: str,
+    body: Optional[NewVersionRequest] = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new draft handover version (v2+) from current approved claims; leaves earlier versions intact."""
+    handover, _, membership = _get_scoped_handover(handover_id, current_user.id, db)
+    if membership.role != "admin":
+        raise HTTPException(403, "Only workspace admins can create a new handover version.")
+    actor = db.get(User, current_user.id)
+    try:
+        new_h = create_new_handover_version(
+            db,
+            handover,
+            actor,
+            title=body.title if body else None,
+            period_label=body.period_label if body else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    viewer = _resolve_viewer(current_user, membership.role, None)
+    return _serialize_handover(db, new_h, viewer, include_sections=True)
+
+
+@router.get("/api/handovers/{handover_id}/versions")
+def list_handover_versions(
+    handover_id: str,
+    view_as: Optional[str] = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List versions in the same lineage visible to the current viewer (incoming sees approved/shared only)."""
+    handover, _, membership = _get_scoped_handover(handover_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    if not can_view_handover(viewer, handover):
+        raise HTTPException(403, "You do not have access to this handover.")
+    versions = [v for v in lineage_versions(db, handover) if can_view_handover(viewer, v)]
+    return [_serialize_handover(db, v, viewer, include_sections=False) for v in versions]
+
+
+@router.get("/api/handovers/{handover_id}/diff")
+def get_handover_diff(
+    handover_id: str,
+    from_id: Optional[str] = Query(default=None, alias="from"),
+    to_id: Optional[str] = Query(default=None, alias="to"),
+    view_as: Optional[str] = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compare two versions in the same handover lineage, respecting viewer clearance."""
+    handover, _, membership = _get_scoped_handover(handover_id, current_user.id, db)
+    viewer = _resolve_viewer(current_user, membership.role, view_as)
+    if not can_view_handover(viewer, handover):
+        raise HTTPException(403, "You do not have access to this handover.")
+
+    visible_versions = [v for v in lineage_versions(db, handover) if can_view_handover(viewer, v)]
+    by_id = {v.id: v for v in visible_versions}
+    by_num = {str(v.version_number or 1): v for v in visible_versions}
+
+    def _pick(token: Optional[str]) -> Optional[Handover]:
+        if not token:
+            return None
+        return by_id.get(token) or by_num.get(token.lstrip("vV"))
+
+    to_h = _pick(to_id) or handover
+    if from_id:
+        from_h = _pick(from_id)
+        if from_h is None:
+            raise HTTPException(404, "Requested 'from' handover version was not found in this lineage.")
+    else:
+        prior = [v for v in visible_versions if (v.version_number or 1) < (to_h.version_number or 1)]
+        from_h = prior[-1] if prior else to_h
+
+    if to_id and _pick(to_id) is None:
+        raise HTTPException(404, "Requested 'to' handover version was not found in this lineage.")
+
+    return diff_handovers(db, from_h, to_h, can_see_restricted=viewer.can_see_restricted)

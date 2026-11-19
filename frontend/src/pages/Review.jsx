@@ -7,6 +7,7 @@ import {
   Loading,
   OriginBadge,
   ProjectSubnav,
+  StaleBadge,
   VerificationBadge,
 } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
@@ -310,7 +311,10 @@ export function ReviewWorkbenchPage() {
                             <div className="muted" style={{ fontSize: 12 }}>{item.text.slice(0, 90)}{item.text.length > 90 ? '...' : ''}</div>
                           </td>
                           <td className="mono">{item.module}</td>
-                          <td><VerificationBadge status={item.verification_status} /></td>
+                          <td>
+                            <VerificationBadge status={item.verification_status} />{' '}
+                            <StaleBadge isStale={item.is_stale} possiblyAffected={item.possibly_affected} />
+                          </td>
                           <td><span className="badge">{item.review_status}</span></td>
                           <td className="mono">{item.evidence_count}</td>
                           <td className="mono">
@@ -333,6 +337,7 @@ export function ReviewWorkbenchPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                       <span className="mono"><strong>{detail.id}</strong> · v{detail.version}</span>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <StaleBadge isStale={detail.is_stale} possiblyAffected={detail.possibly_affected} />
                         <VerificationBadge status={detail.verification_status} />
                         <OriginBadge origin={detail.origin_label} />
                         <span className="badge">Review: {detail.review_status}</span>
@@ -351,6 +356,30 @@ export function ReviewWorkbenchPage() {
                       {' · '}Owner: {detail.owner_name || 'Unassigned'}
                       {detail.reviewed_by_name && <> · Last reviewed by {detail.reviewed_by_name} ({fmtDate(detail.reviewed_at)})</>}
                     </div>
+
+                    {(detail.is_stale || detail.possibly_affected) && (
+                      <div className="alert error" style={{ fontSize: 13, marginBottom: 12 }}>
+                        <strong>{detail.is_stale ? 'Stale claim — cited source changed' : 'Possibly affected by new source content'}</strong>
+                        <div>{detail.stale_reason || detail.affected_reason}</div>
+                        {(detail.stale_changes || []).map((ch) => (
+                          <div key={ch.id} style={{ marginTop: 8 }}>
+                            <div className="mono muted" style={{ fontSize: 11 }}>
+                              {ch.source_filename} (v{ch.from_version || '?'} &rarr; v{ch.to_version || '?'}) · {ch.change_type}
+                            </div>
+                            {ch.old_text && (
+                              <div className="diff-del" style={{ padding: 6, marginTop: 4, fontSize: 12 }}>
+                                <strong>Old:</strong> {ch.old_text}
+                              </div>
+                            )}
+                            {ch.new_text && (
+                              <div className="diff-ins" style={{ padding: 6, marginTop: 4, fontSize: 12 }}>
+                                <strong>New:</strong> {ch.new_text}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {acceptDisabledReason && (
                       <div className="alert info" style={{ fontSize: 12 }}>{acceptDisabledReason}</div>

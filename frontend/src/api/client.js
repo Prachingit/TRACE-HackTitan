@@ -152,6 +152,20 @@ export const api = {
     request(`/api/handovers/${hid}/onboarding`, { method: 'POST', json: { item_key, completed, note } }),
   askProject: (pid, question, filters = {}) =>
     request(`/api/projects/${pid}/ask${qs(filters)}`, { method: 'POST', json: { question } }),
+
+  // Round 3: Living Handover (versions, changes, stale claims, handover diffs)
+  projectChanges: (pid, filters = {}) =>
+    request(`/api/projects/${pid}/changes${qs(filters)}`),
+  sourceVersions: (sid, filters = {}) =>
+    request(`/api/sources/${sid}/versions${qs(filters)}`),
+  updateManualSource: (pid, sid, d) =>
+    request(`/api/projects/${pid}/sources/${sid}/manual`, { method: 'PATCH', json: d }),
+  createHandoverVersion: (hid, d = {}) =>
+    request(`/api/handovers/${hid}/new-version`, { method: 'POST', json: d }),
+  handoverVersions: (hid, filters = {}) =>
+    request(`/api/handovers/${hid}/versions${qs(filters)}`),
+  handoverDiff: (hid, fromVer, toVer, filters = {}) =>
+    request(`/api/handovers/${hid}/diff${qs({ from: fromVer, to: toVer, ...filters })}`),
 };
 
 export default api;
