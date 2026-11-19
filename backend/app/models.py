@@ -697,6 +697,82 @@ class AreaScore(Base):
     attempt = relationship("AssessmentAttempt", back_populates="area_scores")
 
 
+class GraphNode(Base):
+    """Continuity Graph node (Round 3, Improvement C)."""
+
+    __tablename__ = "graph_nodes"
+    __table_args__ = (UniqueConstraint("project_id", "node_key", name="uq_graph_node_project_key"),)
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    node_key = Column(String(255), nullable=False)
+    node_type = Column(String(32), nullable=False, index=True)  # person | module | task | document | service
+    label = Column(String(255), nullable=False)
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    review_status = Column(String(32), nullable=False, default="unreviewed", server_default="unreviewed")
+    metadata_json = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class GraphEdge(Base):
+    """Evidence-backed edge in the Continuity Graph (no evidence -> no edge)."""
+
+    __tablename__ = "graph_edges"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_node_id = Column(String(64), ForeignKey("graph_nodes.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_node_id = Column(String(64), ForeignKey("graph_nodes.id", ondelete="CASCADE"), nullable=False, index=True)
+    edge_type = Column(String(32), nullable=False, index=True)  # owns|contributed_to|depends_on|blocks|documents|decided
+    inferred = Column(Boolean, nullable=False, default=False, server_default=false())
+    claim_ids_json = Column(Text, nullable=False)
+    evidence_refs_json = Column(Text, nullable=False)
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    review_status = Column(String(32), nullable=False, default="unreviewed", server_default="unreviewed")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CustodyItem(Base):
+    """Account/service custody checklist item (NEVER stores secrets)."""
+
+    __tablename__ = "custody_items"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(32), nullable=False, default="other")  # repository|hosting|database|domain|CI/CD|cloud account|third-party API|email/SaaS|other
+    name = Column(String(255), nullable=False)
+    owner_person = Column(String(255), nullable=True)
+    backup_owner = Column(String(255), nullable=True)
+    status = Column(String(24), nullable=False, default="unconfirmed", server_default="unconfirmed")  # confirmed|unconfirmed|unknown|transferred
+    where_to_request_access = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    evidence_claim_ids_json = Column(Text, nullable=True)
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    suggested = Column(Boolean, nullable=False, default=False, server_default=false())
+    confirmed_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    events = relationship("CustodyEvent", back_populates="item", cascade="all, delete-orphan", order_by="CustodyEvent.timestamp")
+
+
+class CustodyEvent(Base):
+    """Append-only audit history for CustodyItem changes."""
+
+    __tablename__ = "custody_events"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    custody_item_id = Column(String(64), ForeignKey("custody_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_id = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String(32), nullable=False)  # suggested|created|updated|confirmed|transferred
+    detail_json = Column(Text, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    item = relationship("CustodyItem", back_populates="events")
+    actor = relationship("User")
+
+
 
 # Review history is append-only: updates are blocked at the ORM layer.
 from sqlalchemy import event  # noqa: E402
@@ -710,4 +786,9 @@ def _review_events_are_append_only(mapper, connection, target):  # pragma: no co
 @event.listens_for(HandoverEvent, "before_update")
 def _handover_events_are_append_only(mapper, connection, target):  # pragma: no cover - guard
     raise ValueError("HandoverEvent rows are append-only and cannot be modified.")
+
+
+@event.listens_for(CustodyEvent, "before_update")
+def _custody_events_are_append_only(mapper, connection, target):  # pragma: no cover - guard
+    raise ValueError("CustodyEvent rows are append-only and cannot be modified.")
 

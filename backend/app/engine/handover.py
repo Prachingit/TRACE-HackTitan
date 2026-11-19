@@ -51,6 +51,7 @@ SECTION_DEFS: List[Tuple[str, str]] = [
     ("bugs_blockers", "8. Known bugs and blockers"),
     ("knowledge_gaps", "9. Knowledge gaps and unverified items"),
     ("recommended_next_steps", "10. Recommended next steps"),
+    ("continuity_custody", "11. Continuity and custody"),
 ]
 
 _RATIONALE_RE = re.compile(
@@ -434,6 +435,91 @@ def generate_handover(
     if period_label:
         overview_summary += f" Period: {period_label}."
 
+    # Continuity Graph & Custody checklist integration (Round 3, Improvement C)
+    from app.engine.continuity import (
+        analyze_graph_risks,
+        list_custody_for_viewer,
+        rebuild_continuity_graph,
+    )
+    from app.engine.clearance import resolve_viewer_profile
+
+    rebuild_continuity_graph(db, project.id)
+    admin_viewer = resolve_viewer_profile(created_by.id, created_by.name, "admin", None)
+    graph_risks = analyze_graph_risks(db, project.id, admin_viewer)
+    custody_all = list_custody_for_viewer(db, project.id, admin_viewer)
+    unconfirmed_custody = [ci for ci in custody_all if ci["status"] in ("unconfirmed", "unknown")]
+    orphaned_modules = [m["module"] for m in graph_risks["unowned_modules"]]
+
+    # Feed unconfirmed custody items and orphaned modules into ranked plan & knowledge gaps
+    next_pri = len(plan_items) + 1
+    for ci in unconfirmed_custody:
+        plan_items.append(
+            {
+                "id": f"plan-custody-{ci['id']}",
+                "priority": next_pri,
+                "bucket": 2,
+                "title": f"Confirm custody & transfer access for {ci['name']} ({ci['kind']})",
+                "description": ci.get("where_to_request_access") or "Confirm owner, backup owner, and access procedure.",
+                "why_it_matters": "Unconfirmed service/account custody risks losing operational access after handover.",
+                "module": "custody",
+                "owner": ci.get("owner_person"),
+                "status": ci["status"],
+                "dependencies": [],
+                "downstream_count": 0,
+                "relevant_files": [],
+                "claim_ids": ci.get("evidence_claim_ids") or [],
+                "verification_status": "inferred",
+                "review_status": "unreviewed",
+                "evidence": [],
+                "clearance_level": ci.get("clearance_level") or "team",
+                "is_gap_summary": True,
+            }
+        )
+        next_pri += 1
+    for mod_name in orphaned_modules:
+        plan_items.append(
+            {
+                "id": f"plan-orphan-{mod_name}",
+                "priority": next_pri,
+                "bucket": 3,
+                "title": f"Assign owner for orphaned module '{mod_name}'",
+                "description": f"Module '{mod_name}' has no recorded owner or contributor.",
+                "why_it_matters": "Unowned modules become immediate blind spots when team members leave.",
+                "module": mod_name,
+                "owner": None,
+                "status": "unowned",
+                "dependencies": [],
+                "downstream_count": 0,
+                "relevant_files": [],
+                "claim_ids": [],
+                "verification_status": "missing",
+                "review_status": "unreviewed",
+                "evidence": [],
+                "clearance_level": "team",
+                "is_gap_summary": True,
+            }
+        )
+        next_pri += 1
+
+    custody_summary_items = [
+        {
+            "claim_id": (ci.get("evidence_claim_ids") or [ci["id"]])[0],
+            "claim_ids": ci.get("evidence_claim_ids") or [],
+            "title": f"{ci['name']} ({ci['kind']})",
+            "statement": (
+                f"Owner: {ci.get('owner_person') or 'Unassigned'}"
+                + (f" · Backup: {ci['backup_owner']}" if ci.get("backup_owner") else "")
+                + (f" · Access: {ci['where_to_request_access']}" if ci.get("where_to_request_access") else "")
+            ),
+            "module": "custody",
+            "verification_status": "verified" if ci["status"] in ("confirmed", "transferred") else "inferred",
+            "review_status": "approved" if ci["status"] in ("confirmed", "transferred") else "unreviewed",
+            "clearance_level": ci.get("clearance_level") or "team",
+            "custody_status": ci["status"],
+        }
+        for ci in custody_all
+    ]
+
     sections_payload: Dict[str, Tuple[str, Dict[str, Any]]] = {
         "overview": (
             overview_summary,
@@ -498,11 +584,25 @@ def generate_handover(
                 "undocumented_modules": undocumented_modules,
                 "cycle_gaps": cycle_gaps,
                 "unapproved_plan_preview": admin_plan_all,
+                "unconfirmed_custody": unconfirmed_custody,
+                "orphaned_modules": orphaned_modules,
             },
         ),
         "recommended_next_steps": (
             f"{len(plan_items)} ranked continuation step(s) derived from approved evidence.",
             {"items": plan_items},
+        ),
+        "continuity_custody": (
+            (
+                f"{len(graph_risks['single_points_of_failure'])} single point(s) of failure, "
+                f"{len(custody_all)} custody item(s) ({len(unconfirmed_custody)} unconfirmed/open transfer)."
+            ),
+            {
+                "items": custody_summary_items,
+                "single_points_of_failure": graph_risks["single_points_of_failure"],
+                "unowned_modules": graph_risks["unowned_modules"],
+                "open_transfer_actions": unconfirmed_custody,
+            },
         ),
     }
 

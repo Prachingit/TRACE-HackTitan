@@ -282,6 +282,13 @@ def execute_run(
         # Run citation validation service (Phase 4)
         val_report = validate_project_citations(db, project.id, role="admin", enforce=True)
 
+        # Rebuild Continuity Graph (Round 3, Improvement C)
+        try:
+            from app.engine.continuity import rebuild_continuity_graph
+            rebuild_continuity_graph(db, project.id)
+        except Exception:
+            pass
+
         total_active_claims = db.query(Claim).filter(Claim.project_id == project.id).count()
         _finish_stage(
             db,

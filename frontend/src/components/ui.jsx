@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   Compass,
   GitCompare,
+  Network,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -115,6 +116,7 @@ export function ProjectSubnav({ projectId }) {
     <nav className="subnav" aria-label="Project sections">
       <NavLink to={`/projects/${projectId}`} end>Sources</NavLink>
       <NavLink to={`/projects/${projectId}/changes`}>Changes</NavLink>
+      <NavLink to={`/projects/${projectId}/continuity`}>Continuity</NavLink>
       <NavLink to={`/projects/${projectId}/reconstruct`}>Reconstruct</NavLink>
       <NavLink to={`/projects/${projectId}/activity`}>Activity timeline</NavLink>
       <NavLink to={`/projects/${projectId}/knowledge`}>Knowledge base</NavLink>
@@ -157,6 +159,7 @@ export function Layout() {
             <NavLink to="/handover-reports"><FileSpreadsheet size={16} strokeWidth={1.5} />Handover reports</NavLink>
             <NavLink to="/projects"><FolderKanban size={16} strokeWidth={1.5} />Projects</NavLink>
             <NavLink to="/changes"><GitCompare size={16} strokeWidth={1.5} />Changes</NavLink>
+            <NavLink to="/continuity"><Network size={16} strokeWidth={1.5} />Continuity</NavLink>
             <NavLink to="/activity"><Activity size={16} strokeWidth={1.5} />Activity</NavLink>
             <NavLink to="/knowledge-base"><BookOpen size={16} strokeWidth={1.5} />Knowledge base</NavLink>
             <NavLink to="/evidence"><FileCheck2 size={16} strokeWidth={1.5} />Evidence ledger</NavLink>

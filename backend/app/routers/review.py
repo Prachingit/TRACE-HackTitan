@@ -130,6 +130,11 @@ def review_claim(
     except ReviewError as e:
         db.rollback()
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+    try:
+        from app.engine.continuity import rebuild_continuity_graph
+        rebuild_continuity_graph(db, clm.project_id)
+    except Exception:
+        pass
     db.refresh(clm)
     detail = _serialize_claim(clm, db, include_evidence=True)
     return ReviewActionResponse(**detail.model_dump(), resolved_contradiction_ids=result.resolved_contradiction_ids)

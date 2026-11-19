@@ -180,6 +180,28 @@ export const api = {
     request(`/api/handovers/${hid}/readiness${qs(filters)}`),
   sendWeakAreasToInterview: (hid) =>
     request(`/api/handovers/${hid}/readiness/send-to-interview`, { method: 'POST' }),
+
+  // Round 3, Improvement C: Continuity Graph & Custody Checklist
+  rebuildGraph: (pid) =>
+    request(`/api/projects/${pid}/graph/rebuild`, { method: 'POST' }),
+  projectGraph: (pid, filters = {}) =>
+    request(`/api/projects/${pid}/graph${qs(filters)}`),
+  graphRisks: (pid, filters = {}) =>
+    request(`/api/projects/${pid}/graph/risks${qs(filters)}`),
+  graphImpact: (pid, person_id, filters = {}) =>
+    request(`/api/projects/${pid}/graph/impact${qs({ person_id, ...filters })}`),
+  listCustody: (pid, filters = {}) =>
+    request(`/api/projects/${pid}/custody${qs(filters)}`),
+  createCustody: (pid, d) =>
+    request(`/api/projects/${pid}/custody`, { method: 'POST', json: d }),
+  updateCustody: (cid, d) =>
+    request(`/api/custody/${cid}`, { method: 'PATCH', json: d }),
+  deleteCustody: (cid) =>
+    request(`/api/custody/${cid}`, { method: 'DELETE' }),
+  confirmCustody: (cid, status = 'confirmed', note = null) =>
+    request(`/api/custody/${cid}/confirm`, { method: 'POST', json: { status, note } }),
+  custodyHistory: (cid) =>
+    request(`/api/custody/${cid}/history`),
 };
 
 export default api;

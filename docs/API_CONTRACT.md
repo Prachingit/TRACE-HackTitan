@@ -141,3 +141,18 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 | POST | `/assessment-attempts/{id}/submit` | `{answers: [{question_id, answer_text}]}`. Scores MCQ (exact) and short-answer (deterministic key-term coverage + heuristic flag), computes `AreaScore`s, and returns explanations citing source claims (never exposes `correct_answer` to incoming). |
 | GET | `/handovers/{id}/readiness` | Returns per-area scores, baseline vs latest re-assessment delta, and weak areas (`needs_more_handover`). Incoming sees only their own attempts. |
 | POST | `/handovers/{id}/readiness/send-to-interview` | Admin only (403). Idempotently creates `InterviewQuestion` follow-ups for weak-area missed claims. |
+
+## Round 3, Improvement C: Continuity Graph & Custody Checklist
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/projects/{id}/graph/rebuild` | Admin or `team_member` (403 otherwise). Idempotently rebuilds evidence-backed `GraphNode`s, `GraphEdge`s, and deterministic `CustodyItem` suggestions. |
+| GET | `/projects/{id}/graph` | Clearance-filtered Continuity Graph (`?node_type=`, `?view_as=`). Incoming sees approved, non-restricted edges only. |
+| GET | `/projects/{id}/graph/risks` | Single points of failure, unowned modules, undocumented modules, and circular dependencies (clearance-filtered). |
+| GET | `/projects/{id}/graph/impact?person_id=` | "What breaks if X leaves" ranked by downstream dependent count (clearance-filtered). |
+| GET | `/projects/{id}/custody` | Clearance-filtered custody checklist (incoming sees `confirmed`/`transferred`, non-restricted items only). |
+| POST | `/projects/{id}/custody` | Admin only (403). Secret-validated: rejects private keys, token prefixes, `password=`/`secret=`, credentialed URLs, and high-entropy strings with `400`. |
+| PATCH | `/custody/{id}` | Admin only (403). Secret-validated update; appends `CustodyEvent`. |
+| DELETE | `/custody/{id}` | Admin only (403). |
+| POST | `/custody/{id}/confirm` | Admin only (403). `{status: "confirmed" \| "transferred", note?}`. Appends `CustodyEvent`. |
+| GET | `/custody/{id}/history` | Append-only `CustodyEvent` audit log (admin or `team_member`). |

@@ -337,6 +337,8 @@ def _filter_section_content(content: Dict[str, Any], viewer: ViewerContext) -> D
     # Never expose admin-only needs_review / unapproved buffer to incoming
     filtered.pop("needs_review_items", None)
     filtered.pop("unapproved_plan_preview", None)
+    filtered.pop("unconfirmed_custody", None)
+    filtered.pop("open_transfer_actions", None)
     for gap_list_key in ("open_contradictions", "unanswered_questions"):
         if gap_list_key in filtered and isinstance(filtered[gap_list_key], list):
             filtered[gap_list_key] = [
