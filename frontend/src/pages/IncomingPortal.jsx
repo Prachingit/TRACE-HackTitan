@@ -23,12 +23,28 @@ export function IncomingPortalPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  // Readiness Verification ("Check my understanding")
+  const [assessment, setAssessment] = useState(null);
+  const [readiness, setReadiness] = useState(null);
+  const [activeAttempt, setActiveAttempt] = useState(null);
+  const [qIdx, setQIdx] = useState(0);
+  const [answersMap, setAnswersMap] = useState({});
+  const [submittedAttempt, setSubmittedAttempt] = useState(null);
+
   const loadDetail = useCallback(async (hid) => {
-    const [d, ob] = await Promise.all([
+    const [d, ob, ass, rdy] = await Promise.all([
       api.handoverDetail(hid),
       api.getOnboarding(hid).catch(() => []),
+      api.getAssessment(hid).catch(() => null),
+      api.handoverReadiness(hid).catch(() => null),
     ]);
     setDetail(d);
+    setAssessment(ass);
+    setReadiness(rdy);
+    setActiveAttempt(null);
+    setSubmittedAttempt(null);
+    setAnswersMap({});
+    setQIdx(0);
     const map = {};
     for (const row of ob || []) {
       map[row.item_key] = Boolean(row.completed);
@@ -77,6 +93,43 @@ export function IncomingPortalPage() {
       await loadDetail(detail.id);
     } catch (err) {
       setError(err.message || 'Could not acknowledge handover.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onStartAssessment() {
+    if (!detail) return;
+    setBusy(true);
+    setError('');
+    try {
+      const att = await api.startAssessmentAttempt(detail.id);
+      setActiveAttempt(att);
+      setSubmittedAttempt(null);
+      setAnswersMap({});
+      setQIdx(0);
+    } catch (err) {
+      setError(err.message || 'Could not start assessment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSubmitAssessment() {
+    if (!activeAttempt) return;
+    setBusy(true);
+    setError('');
+    try {
+      const payload = (activeAttempt.questions || []).map((q) => ({
+        question_id: q.id,
+        answer_text: answersMap[q.id] || '',
+      }));
+      const res = await api.submitAssessmentAttempt(activeAttempt.id, payload);
+      setSubmittedAttempt(res);
+      setActiveAttempt(null);
+      setReadiness(await api.handoverReadiness(detail.id).catch(() => null));
+    } catch (err) {
+      setError(err.message || 'Could not submit assessment.');
     } finally {
       setBusy(false);
     }
@@ -294,6 +347,195 @@ export function IncomingPortalPage() {
           </div>
         ) : (
           <p className="muted">This section is not included in your approved handover.</p>
+        )}
+      </div>
+
+      {/* Check my understanding (Readiness Verification) */}
+      <div className="panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Check my understanding</h2>
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              Scenario questions from approved handover claims to verify readiness across modules.
+            </p>
+          </div>
+          {!activeAttempt && (assessment?.question_count || 0) > 0 && (
+            <button className="btn sm primary" type="button" onClick={onStartAssessment} disabled={busy}>
+              {(readiness?.participants?.[0]?.attempt_count || 0) > 0 ? 'Retake assessment' : 'Start baseline check'}
+            </button>
+          )}
+        </div>
+
+        {(assessment?.question_count || 0) === 0 ? (
+          <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+            No assessment has been published for this handover yet. Ask your team lead to generate it in Handover Center.
+          </p>
+        ) : activeAttempt ? (
+          (() => {
+            const qs = activeAttempt.questions || [];
+            const cur = qs[qIdx];
+            if (!cur) return null;
+            return (
+              <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <span className="mono" style={{ fontSize: 12 }}>
+                    Question {qIdx + 1} of {qs.length} · Module: {cur.module} ({activeAttempt.attempt_kind})
+                  </span>
+                  <span className="badge">{cur.question_type === 'mcq' ? 'Multiple choice' : 'Short answer (heuristic)'}</span>
+                </div>
+                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round(((qIdx + 1) / qs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+                </div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{cur.prompt}</div>
+
+                {cur.question_type === 'mcq' && Array.isArray(cur.options) ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {cur.options.map((opt) => (
+                      <label
+                        key={opt}
+                        style={{
+                          display: 'flex', gap: 8, alignItems: 'center', padding: 10,
+                          border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${cur.id}`}
+                          checked={answersMap[cur.id] === opt}
+                          onChange={() => setAnswersMap((p) => ({ ...p, [cur.id]: opt }))}
+                          style={{ width: 'auto' }}
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      placeholder="Write what you would check first..."
+                      value={answersMap[cur.id] || ''}
+                      onChange={(e) => setAnswersMap((p) => ({ ...p, [cur.id]: e.target.value }))}
+                    />
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      Note: Short-answer scores are heuristic based on key-term coverage and may be flagged for reviewer check.
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn sm" type="button" disabled={qIdx === 0} onClick={() => setQIdx((i) => Math.max(0, i - 1))}>
+                    Previous
+                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {qIdx < qs.length - 1 ? (
+                      <button className="btn sm primary" type="button" onClick={() => setQIdx((i) => Math.min(qs.length - 1, i + 1))}>
+                        Next
+                      </button>
+                    ) : (
+                      <button className="btn sm primary" type="button" disabled={busy} onClick={onSubmitAssessment}>
+                        {busy ? 'Scoring...' : 'Submit assessment'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          (() => {
+            const p = readiness?.participants?.[0];
+            const shown = submittedAttempt || p?.attempts?.[p.attempts.length - 1];
+            if (!shown) {
+              return (
+                <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+                  {assessment.question_count} scenario question(s) ready. Click "Start baseline check" to test your readiness.
+                </p>
+              );
+            }
+            return (
+              <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+                <div className="grid4">
+                  <div className="stat">
+                    <div className="muted">Latest score</div>
+                    <div className="stat-num">{Math.round(shown.overall_score || 0)}%</div>
+                  </div>
+                  <div className="stat">
+                    <div className="muted">Correct</div>
+                    <div className="stat-num">{shown.correct_count}/{shown.total_questions}</div>
+                  </div>
+                  {p && (
+                    <>
+                      <div className="stat">
+                        <div className="muted">Baseline</div>
+                        <div className="stat-num">{Math.round(p.baseline_score || 0)}%</div>
+                      </div>
+                      <div className="stat">
+                        <div className="muted">Before / after delta</div>
+                        <div className="stat-num">{p.delta_overall >= 0 ? `+${p.delta_overall}` : p.delta_overall}%</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {(shown.area_scores || []).length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Area / Module</th>
+                          <th>Score</th>
+                          <th>Correct</th>
+                          <th>Weight</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {shown.area_scores.map((ar) => (
+                          <tr key={ar.id}>
+                            <td className="mono">{ar.module}</td>
+                            <td>{ar.score}%</td>
+                            <td className="mono">{ar.correct_count}/{ar.question_count}</td>
+                            <td className="mono">{ar.weight}x</td>
+                            <td>
+                              <span className={`badge ${ar.status === 'ready' ? 'ok' : 'warn'}`}>
+                                {ar.status === 'ready' ? 'Ready' : 'Needs more handover'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {(shown.answers || []).length > 0 && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <h3 style={{ margin: '4px 0' }}>Explanations &amp; cited claims</h3>
+                    {shown.answers.map((ans) => (
+                      <div key={ans.question_id} style={{ border: '1px solid var(--border)', padding: 10, borderRadius: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                          <strong>{ans.prompt}</strong>
+                          <span className={`badge ${ans.is_correct ? 'ok' : 'bad'}`}>
+                            {ans.is_correct ? 'Correct' : `Score ${Math.round((ans.score || 0) * 100)}%`}
+                          </span>
+                        </div>
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                          Your answer: {ans.answer_text || '(blank)'}
+                        </div>
+                        <div style={{ fontSize: 13, marginTop: 6 }}>{ans.explanation}</div>
+                        <div className="mono muted" style={{ fontSize: 11, marginTop: 4 }}>
+                          Claims: {(ans.source_claim_ids || []).join(', ')}
+                          {ans.needs_reviewer_check ? ' · Heuristic score flagged for reviewer check' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
       </div>
 

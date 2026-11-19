@@ -130,3 +130,14 @@ Contradictions carry `clearance_level` (`restricted` hidden from `incoming`/`dep
 | POST | `/handovers/{id}/new-version` | Admin only (403). Creates draft handover v2+ from current approved claims while leaving earlier approved versions intact (idempotent if a draft already exists). |
 | GET | `/handovers/{id}/versions` | Lists handover versions in the same lineage visible to the viewer (incoming sees approved/shared versions only). |
 | GET | `/handovers/{id}/diff?from=&to=` | Compares two handover versions in the same lineage (`added`, `removed`, `changed`, old vs new text, and cause), respecting viewer clearance. |
+
+## Round 3, Improvement B: Readiness Verification
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/handovers/{id}/assessment/generate` | Admin only (403). Idempotently generates evidence-based scenario questions ONLY from approved, incoming-visible claims. |
+| GET | `/handovers/{id}/assessment` | Returns assessment questions for the handover. Answer keys (`correct_answer`, `answer_key`, `explanation`) are NEVER returned to the incoming role. |
+| POST | `/assessment-attempts` | `{handover_id}`. Starts a new `baseline` or `reassessment` attempt for the current user (403 for departing or unshared incoming). |
+| POST | `/assessment-attempts/{id}/submit` | `{answers: [{question_id, answer_text}]}`. Scores MCQ (exact) and short-answer (deterministic key-term coverage + heuristic flag), computes `AreaScore`s, and returns explanations citing source claims (never exposes `correct_answer` to incoming). |
+| GET | `/handovers/{id}/readiness` | Returns per-area scores, baseline vs latest re-assessment delta, and weak areas (`needs_more_handover`). Incoming sees only their own attempts. |
+| POST | `/handovers/{id}/readiness/send-to-interview` | Admin only (403). Idempotently creates `InterviewQuestion` follow-ups for weak-area missed claims. |

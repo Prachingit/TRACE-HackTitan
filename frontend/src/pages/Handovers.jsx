@@ -123,6 +123,8 @@ export function HandoverCenterPage() {
   const [diffFrom, setDiffFrom] = useState('');
   const [diffTo, setDiffTo] = useState('');
   const [diffData, setDiffData] = useState(null);
+  const [readinessReport, setReadinessReport] = useState(null);
+  const [readinessMsg, setReadinessMsg] = useState('');
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -183,12 +185,15 @@ export function HandoverCenterPage() {
       if (list.length > 0) {
         const keep = list.some((h) => h.id === selectedId) ? selectedId : list[0].id;
         setSelectedId(keep);
-        const [d, vs] = await Promise.all([
+        const [d, vs, rdy] = await Promise.all([
           api.handoverDetail(keep, filters),
           api.handoverVersions(keep, filters).catch(() => []),
+          api.handoverReadiness(keep, filters).catch(() => null),
         ]);
         setDetail(d);
         setVersions(vs || []);
+        setReadinessReport(rdy);
+        setReadinessMsg('');
         setShowDiff(false);
         setDiffData(null);
       } else {
@@ -211,12 +216,15 @@ export function HandoverCenterPage() {
     setDiffData(null);
     try {
       const filters = viewAs ? { view_as: viewAs } : {};
-      const [d, vs] = await Promise.all([
+      const [d, vs, rdy] = await Promise.all([
         api.handoverDetail(hid, filters),
         api.handoverVersions(hid, filters).catch(() => []),
+        api.handoverReadiness(hid, filters).catch(() => null),
       ]);
       setDetail(d);
       setVersions(vs || []);
+      setReadinessReport(rdy);
+      setReadinessMsg('');
       if (showHistory) {
         setHistory(await api.handoverHistory(hid));
       }
@@ -249,6 +257,37 @@ export function HandoverCenterPage() {
       setDiffData(res);
     } catch (err) {
       setError(err.message || 'Failed to load version diff.');
+    }
+  }
+
+  async function onGenerateAssessment() {
+    if (!detail) return;
+    setBusy(true);
+    setError('');
+    setReadinessMsg('');
+    try {
+      const res = await api.generateAssessment(detail.id);
+      setReadinessMsg(`Assessment ready with ${res.question_count} scenario question(s).`);
+      setReadinessReport(await api.handoverReadiness(detail.id).catch(() => null));
+    } catch (err) {
+      setError(err.message || 'Failed to generate assessment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSendWeakToInterview() {
+    if (!detail) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.sendWeakAreasToInterview(detail.id);
+      setReadinessMsg(`Created ${res.created_interview_questions} exit interview follow-up question(s) from weak areas.`);
+      setReadinessReport(await api.handoverReadiness(detail.id).catch(() => null));
+    } catch (err) {
+      setError(err.message || 'Failed to send weak areas to exit interview.');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -647,6 +686,87 @@ export function HandoverCenterPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          )}
+
+          {/* Readiness Verification Panel */}
+          {isAdmin && !isPreview && (
+            <div className="panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Readiness verification (incoming member check)</h3>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                    Scenario questions from approved claims, per-area readiness scores, and before/after progress.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn sm" type="button" onClick={onGenerateAssessment} disabled={busy}>
+                    Generate / refresh assessment
+                  </button>
+                  {(readinessReport?.weak_areas || []).length > 0 && (
+                    <button className="btn sm primary" type="button" onClick={onSendWeakToInterview} disabled={busy}>
+                      Send weak areas to Exit Interview
+                    </button>
+                  )}
+                </div>
+              </div>
+              {readinessMsg && <div className="alert info" style={{ marginTop: 10 }}>{readinessMsg}</div>}
+              {(readinessReport?.who_needs_help || []).length > 0 && (
+                <div className="alert error" style={{ marginTop: 10 }}>
+                  <strong>Needs help:</strong>{' '}
+                  {readinessReport.who_needs_help.map((u) => `${u.user_name} (${u.latest_score}%)`).join(', ')}
+                </div>
+              )}
+              {(readinessReport?.participants || []).length === 0 ? (
+                <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+                  No incoming member attempts submitted yet. Generate the assessment so the incoming member can complete "Check my understanding" in the Incoming Portal.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                  {readinessReport.participants.map((p) => (
+                    <div key={p.user_id} style={{ border: '1px solid var(--border)', padding: 10, borderRadius: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        <strong>{p.user_name}</strong>
+                        <span className="mono" style={{ fontSize: 12 }}>
+                          Baseline: {p.baseline_score}% · Latest: {p.latest_score}% · Delta: {p.delta_overall >= 0 ? `+${p.delta_overall}` : p.delta_overall}% ({p.attempt_count} attempt(s))
+                        </span>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Area / Module</th>
+                              <th>Baseline</th>
+                              <th>Latest</th>
+                              <th>Delta</th>
+                              <th>Status</th>
+                              <th>Missed claims</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(p.areas || []).map((ar) => (
+                              <tr key={ar.module}>
+                                <td className="mono">{ar.module}</td>
+                                <td>{ar.baseline_score}%</td>
+                                <td>{ar.latest_score}%</td>
+                                <td className="mono">{ar.delta >= 0 ? `+${ar.delta}` : ar.delta}%</td>
+                                <td>
+                                  <span className={`badge ${ar.status === 'ready' ? 'ok' : 'warn'}`}>
+                                    {ar.status === 'ready' ? 'Ready' : 'Needs more handover'}
+                                  </span>
+                                </td>
+                                <td className="mono" style={{ fontSize: 12 }}>
+                                  {(ar.missed_claim_ids || []).join(', ') || '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}

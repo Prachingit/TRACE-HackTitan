@@ -585,6 +585,118 @@ class SourceChange(Base):
     source = relationship("Source", back_populates="changes")
 
 
+class Assessment(Base):
+    """Readiness verification assessment generated from a handover's approved, incoming-visible claims."""
+
+    __tablename__ = "assessments"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(24), nullable=False, default="ready", server_default="ready")
+    text_source = Column(String(16), nullable=False, default="template", server_default="template")  # template | llm
+    created_by = Column(String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    questions = relationship(
+        "AssessmentQuestion", back_populates="assessment", cascade="all, delete-orphan", order_by="AssessmentQuestion.ordinal"
+    )
+    attempts = relationship("AssessmentAttempt", back_populates="assessment", cascade="all, delete-orphan")
+
+
+class AssessmentQuestion(Base):
+    """One scenario question (MCQ or short-answer) grounded in approved handover claims."""
+
+    __tablename__ = "assessment_questions"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    assessment_id = Column(String(64), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True)
+    ordinal = Column(Integer, nullable=False, default=1)
+    module = Column(String(64), nullable=False, index=True)
+    question_type = Column(String(24), nullable=False)  # mcq | short_answer
+    prompt = Column(Text, nullable=False)
+    options_json = Column(Text, nullable=True)  # JSON list for MCQ
+    correct_answer = Column(Text, nullable=False)  # NEVER sent to incoming role
+    answer_key_json = Column(Text, nullable=True)  # JSON key terms/entities; NEVER sent to incoming role
+    explanation = Column(Text, nullable=False)
+    source_claim_ids_json = Column(Text, nullable=False)  # JSON list of Claim IDs
+    evidence_refs_json = Column(Text, nullable=True)  # JSON list of source/locator/excerpt refs
+    weight = Column(Float, nullable=False, default=1.0, server_default="1.0")
+    clearance_level = Column(String(32), nullable=False, default="team", server_default="team")
+    fingerprint = Column(String(64), nullable=False, index=True)
+    text_source = Column(String(16), nullable=False, default="template", server_default="template")
+
+    assessment = relationship("Assessment", back_populates="questions")
+
+
+class AssessmentAttempt(Base):
+    """One incoming member's baseline or reassessment attempt."""
+
+    __tablename__ = "assessment_attempts"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    assessment_id = Column(String(64), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True)
+    handover_id = Column(String(64), ForeignKey("handovers.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    attempt_kind = Column(String(24), nullable=False, default="baseline")  # baseline | reassessment
+    status = Column(String(24), nullable=False, default="in_progress")  # in_progress | submitted
+    overall_score = Column(Float, nullable=True)
+    correct_count = Column(Integer, nullable=False, default=0, server_default="0")
+    total_questions = Column(Integer, nullable=False, default=0, server_default="0")
+    needs_review_count = Column(Integer, nullable=False, default=0, server_default="0")
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
+
+    assessment = relationship("Assessment", back_populates="attempts")
+    answers = relationship("AssessmentAnswer", back_populates="attempt", cascade="all, delete-orphan")
+    area_scores = relationship("AreaScore", back_populates="attempt", cascade="all, delete-orphan")
+
+
+class AssessmentAnswer(Base):
+    """One answered question inside an attempt."""
+
+    __tablename__ = "assessment_answers"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    attempt_id = Column(String(64), ForeignKey("assessment_attempts.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(String(64), ForeignKey("assessment_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    answer_text = Column(Text, nullable=False)
+    is_correct = Column(Boolean, nullable=True)
+    score = Column(Float, nullable=False, default=0.0)
+    confidence = Column(Float, nullable=False, default=1.0)
+    needs_reviewer_check = Column(Boolean, nullable=False, default=False, server_default=false())
+    heuristic_rationale = Column(Text, nullable=True)
+    llm_suggested_score = Column(Float, nullable=True)
+    answered_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    attempt = relationship("AssessmentAttempt", back_populates="answers")
+    question = relationship("AssessmentQuestion")
+
+
+class AreaScore(Base):
+    """Per-module/area readiness score for an AssessmentAttempt."""
+
+    __tablename__ = "area_scores"
+
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    attempt_id = Column(String(64), ForeignKey("assessment_attempts.id", ondelete="CASCADE"), nullable=False, index=True)
+    module = Column(String(64), nullable=False)
+    score = Column(Float, nullable=False, default=0.0)
+    correct_count = Column(Integer, nullable=False, default=0)
+    question_count = Column(Integer, nullable=False, default=0)
+    weight = Column(Float, nullable=False, default=1.0)
+    weighted_points = Column(Float, nullable=False, default=0.0)
+    max_weighted_points = Column(Float, nullable=False, default=0.0)
+    status = Column(String(32), nullable=False, default="ready")  # ready | needs_more_handover
+    missed_claim_ids_json = Column(Text, nullable=True)
+    sent_to_interview_at = Column(DateTime(timezone=True), nullable=True)
+
+    attempt = relationship("AssessmentAttempt", back_populates="area_scores")
+
+
 
 # Review history is append-only: updates are blocked at the ORM layer.
 from sqlalchemy import event  # noqa: E402

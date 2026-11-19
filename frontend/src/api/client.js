@@ -166,6 +166,20 @@ export const api = {
     request(`/api/handovers/${hid}/versions${qs(filters)}`),
   handoverDiff: (hid, fromVer, toVer, filters = {}) =>
     request(`/api/handovers/${hid}/diff${qs({ from: fromVer, to: toVer, ...filters })}`),
+
+  // Round 3, Improvement B: Readiness Verification
+  generateAssessment: (hid) =>
+    request(`/api/handovers/${hid}/assessment/generate`, { method: 'POST' }),
+  getAssessment: (hid, filters = {}) =>
+    request(`/api/handovers/${hid}/assessment${qs(filters)}`),
+  startAssessmentAttempt: (handover_id) =>
+    request('/api/assessment-attempts', { method: 'POST', json: { handover_id } }),
+  submitAssessmentAttempt: (attemptId, answers) =>
+    request(`/api/assessment-attempts/${attemptId}/submit`, { method: 'POST', json: { answers } }),
+  handoverReadiness: (hid, filters = {}) =>
+    request(`/api/handovers/${hid}/readiness${qs(filters)}`),
+  sendWeakAreasToInterview: (hid) =>
+    request(`/api/handovers/${hid}/readiness/send-to-interview`, { method: 'POST' }),
 };
 
 export default api;

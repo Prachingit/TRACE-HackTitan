@@ -18,7 +18,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.db import SessionLocal
-from app.routers import analysis, assistant, auth, contradictions, handovers, health, interview, projects, review, sources, workspaces
+from app.routers import analysis, assistant, auth, contradictions, handovers, health, interview, projects, readiness, review, sources, workspaces
 from app.routers.auth import limiter
 from app.services.background import reset_stuck_sources
 
@@ -105,6 +105,7 @@ app.include_router(contradictions.router)
 app.include_router(interview.router)
 app.include_router(review.router)
 app.include_router(handovers.router)
+app.include_router(readiness.router)
 app.include_router(assistant.router)
 
 # Serve built React frontend (single-origin deploy)
